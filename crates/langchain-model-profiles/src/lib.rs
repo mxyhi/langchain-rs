@@ -218,6 +218,10 @@ pub const PROVIDERS: &[ProviderProfile] = &[
             "ChatPerplexity",
             "PerplexitySearchRetriever",
             "PerplexitySearchResults",
+            "UserLocation",
+            "WebSearchOptions",
+            "MediaResponse",
+            "MediaResponseOverrides",
             "ReasoningJsonOutputParser",
             "ReasoningStructuredOutputParser",
             "strip_think_tags",
@@ -363,5 +367,18 @@ mod tests {
         assert!(embeddings.contains(&"openai"));
         assert!(embeddings.contains(&"mistralai"));
         assert!(!embeddings.contains(&"anthropic"));
+    }
+
+    #[test]
+    fn perplexity_exports_match_boundary_surface() {
+        let profile = provider("perplexity").expect("provider should exist");
+
+        assert!(profile.exports.contains(&"ChatPerplexity"));
+        assert!(profile.exports.contains(&"PerplexitySearchRetriever"));
+        assert!(profile.exports.contains(&"PerplexitySearchResults"));
+        assert!(profile.exports.contains(&"UserLocation"));
+        assert!(profile.exports.contains(&"WebSearchOptions"));
+        assert!(profile.exports.contains(&"MediaResponse"));
+        assert!(profile.exports.contains(&"MediaResponseOverrides"));
     }
 }

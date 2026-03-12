@@ -1,3 +1,4 @@
+use langchain_classic::chat_models::BaseChatModel;
 use langchain_classic::embeddings::{CharacterEmbeddings, Embeddings};
 use langchain_classic::messages::HumanMessage;
 use langchain_classic::prompt_values::StringPromptValue;
@@ -15,6 +16,28 @@ fn classic_reexports_messages_tools_and_prompt_values() {
     assert_eq!(message.content(), "hello");
     assert_eq!(definition.name(), "lookup");
     assert_eq!(prompt.to_string(), "hello");
+}
+
+#[test]
+fn classic_reexports_chat_models_boundary() {
+    fn assert_chat_model<T: BaseChatModel>(_model: &T) {}
+
+    let model = langchain_classic::chat_models::ParrotChatModel::new("classic-chat-model", 12);
+    assert_chat_model(&model);
+    assert_eq!(model.model_name(), "classic-chat-model");
+
+    let error = match langchain_classic::chat_models::init_chat_model("openai:gpt-4o-mini") {
+        Ok(_) => {
+            panic!("classic init_chat_model boundary should be explicit about unsupported state")
+        }
+        Err(error) => error,
+    };
+    assert!(
+        error
+            .to_string()
+            .contains("classic chat_models::init_chat_model is not implemented"),
+        "unexpected error: {error}"
+    );
 }
 
 #[tokio::test]

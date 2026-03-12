@@ -72,6 +72,12 @@ impl std::fmt::Display for MultipleStructuredOutputsError {
 
 impl std::error::Error for MultipleStructuredOutputsError {}
 
+impl MultipleStructuredOutputsError {
+    fn into_langchain_error(self) -> LangChainError {
+        LangChainError::request(self.to_string())
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct StructuredOutputValidationError {
     tool_name: String,
@@ -116,6 +122,12 @@ impl std::fmt::Display for StructuredOutputValidationError {
 }
 
 impl std::error::Error for StructuredOutputValidationError {}
+
+impl StructuredOutputValidationError {
+    fn into_langchain_error(self) -> LangChainError {
+        LangChainError::request(self.to_string())
+    }
+}
 
 pub struct Agent {
     model: Box<dyn BaseChatModel>,
@@ -162,6 +174,28 @@ impl Agent {
             }
             None => input,
         }
+    }
+
+    fn validate_structured_output_message(
+        &self,
+        raw: &AIMessage,
+        schema: &StructuredOutputSchema,
+    ) -> Result<(), LangChainError> {
+        let matching_tool_names = raw
+            .tool_calls()
+            .iter()
+            .filter(|tool_call| tool_call.name() == schema.name())
+            .map(|tool_call| tool_call.name().to_owned())
+            .collect::<Vec<_>>();
+
+        if matching_tool_names.len() > 1 {
+            return Err(
+                MultipleStructuredOutputsError::new(matching_tool_names, raw.clone())
+                    .into_langchain_error(),
+            );
+        }
+
+        Ok(())
     }
 
     pub async fn invoke_messages(
@@ -211,8 +245,26 @@ impl Agent {
                 } => (Some(raw), parsed, parsing_error),
             };
 
+            if let Some(raw) = raw.as_ref() {
+                self.validate_structured_output_message(raw, schema)?;
+            }
+
             if let Some(error) = parsing_error {
-                return Err(LangChainError::request(error));
+                let tool_name = raw
+                    .as_ref()
+                    .and_then(|message| {
+                        message
+                            .tool_calls()
+                            .first()
+                            .map(|tool_call| tool_call.name().to_owned())
+                    })
+                    .unwrap_or_else(|| schema.name().to_owned());
+                let raw_message = raw.unwrap_or_else(|| AIMessage::new(""));
+
+                return Err(
+                    StructuredOutputValidationError::new(tool_name, error, raw_message)
+                        .into_langchain_error(),
+                );
             }
 
             let mut state_messages = messages;

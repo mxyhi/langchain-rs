@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use futures_util::future::BoxFuture;
 use langchain_core::LangChainError;
 use langchain_core::language_models::{
-    BaseChatModel, StructuredOutput, StructuredOutputOptions, StructuredOutputSchema,
-    ToolBindingOptions,
+    BaseChatModel as CoreBaseChatModel, StructuredOutput, StructuredOutputOptions,
+    StructuredOutputSchema, ToolBindingOptions,
 };
 use langchain_core::messages::{AIMessage, BaseMessage};
 use langchain_core::runnables::{Runnable, RunnableConfig, RunnableDyn};
@@ -102,7 +102,7 @@ impl ConfigurableChatModel {
     fn resolve_bound_model(
         &self,
         config: &RunnableConfig,
-    ) -> Result<Box<dyn BaseChatModel>, LangChainError> {
+    ) -> Result<Box<dyn CoreBaseChatModel>, LangChainError> {
         let (model, provider, runtime_base_url) = self.resolve_model_from_config(config)?;
         let base_url = self.base_url.as_deref().or(runtime_base_url.as_deref());
         let mut resolved = init_chat_model(
@@ -146,7 +146,7 @@ impl Runnable<Vec<BaseMessage>, StructuredOutput> for ConfigurableStructuredOutp
     }
 }
 
-impl BaseChatModel for ConfigurableChatModel {
+impl CoreBaseChatModel for ConfigurableChatModel {
     fn model_name(&self) -> &str {
         self.default_model
             .as_deref()
@@ -168,7 +168,7 @@ impl BaseChatModel for ConfigurableChatModel {
         &self,
         tools: Vec<ToolDefinition>,
         options: ToolBindingOptions,
-    ) -> Result<Box<dyn BaseChatModel>, LangChainError> {
+    ) -> Result<Box<dyn CoreBaseChatModel>, LangChainError> {
         Ok(Box::new(ConfigurableChatModel::bind_tools(
             self.clone(),
             tools,
@@ -216,7 +216,7 @@ pub fn init_chat_model(
     model_provider: Option<&str>,
     base_url: Option<&str>,
     api_key: Option<&str>,
-) -> Result<Box<dyn BaseChatModel>, LangChainError> {
+) -> Result<Box<dyn CoreBaseChatModel>, LangChainError> {
     let (model, provider_key) = parse_model(model, model_provider)?;
     let resolved_base_url = resolve_base_url(&provider_key, base_url);
 
@@ -365,7 +365,9 @@ fn supported_providers() -> String {
 }
 
 pub use langchain_anthropic::ChatAnthropic;
-pub use langchain_core::language_models::{ParrotChatModel, StructuredOutputMethod, ToolChoice};
+pub use langchain_core::language_models::{
+    BaseChatModel, ParrotChatModel, StructuredOutputMethod, ToolChoice,
+};
 pub use langchain_deepseek::ChatDeepSeek;
 pub use langchain_fireworks::ChatFireworks;
 pub use langchain_groq::ChatGroq;

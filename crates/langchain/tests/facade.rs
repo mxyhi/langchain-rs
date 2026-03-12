@@ -1,3 +1,4 @@
+use langchain::chat_models::BaseChatModel;
 use langchain::embeddings::{CharacterEmbeddings, Embeddings};
 use langchain::messages::HumanMessage;
 use langchain::prompt_values::StringPromptValue;
@@ -11,6 +12,15 @@ use langchain::vectorstores::{InMemoryVectorStore, VectorStore};
 fn facade_reexports_messages() {
     let message = HumanMessage::new("hello");
     assert_eq!(message.content(), "hello");
+}
+
+#[test]
+fn facade_reexports_base_chat_model_from_chat_models_module() {
+    fn assert_chat_model<T: BaseChatModel>(_model: &T) {}
+
+    let model = langchain::chat_models::ParrotChatModel::new("facade-chat-model", 16);
+    assert_chat_model(&model);
+    assert_eq!(model.model_name(), "facade-chat-model");
 }
 
 #[test]
