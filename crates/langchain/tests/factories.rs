@@ -331,6 +331,46 @@ fn init_embeddings_requires_provider_when_model_name_cannot_be_inferred() {
     );
 }
 
+#[test]
+fn init_chat_model_rejects_provider_boundaries_without_runtime_transport() {
+    for provider in ["huggingface", "perplexity"] {
+        let error = match init_chat_model(
+            "test-model",
+            ModelInitOptions::default().with_provider(provider),
+        ) {
+            Ok(_) => panic!("provider {provider} should be rejected until transport exists"),
+            Err(error) => error,
+        };
+
+        assert!(
+            error
+                .to_string()
+                .contains(&format!("Unsupported provider='{provider}'")),
+            "unexpected error for {provider}: {error}"
+        );
+    }
+}
+
+#[test]
+fn init_embeddings_rejects_provider_boundaries_without_runtime_transport() {
+    for provider in ["huggingface", "nomic"] {
+        let error = match init_embeddings(
+            "test-embedding-model",
+            ModelInitOptions::default().with_provider(provider),
+        ) {
+            Ok(_) => panic!("provider {provider} should be rejected until transport exists"),
+            Err(error) => error,
+        };
+
+        assert!(
+            error
+                .to_string()
+                .contains(&format!("Provider '{provider}' is not supported")),
+            "unexpected error for {provider}: {error}"
+        );
+    }
+}
+
 #[tokio::test]
 async fn init_chat_model_trait_object_supports_structured_output() {
     let server = MockServer::start().await;
