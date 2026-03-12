@@ -532,9 +532,21 @@ name = "langchain"
 version = "0.1.0"
 dependencies = [
  "futures-util",
+ "langchain-anthropic",
  "langchain-core",
+ "langchain-deepseek",
+ "langchain-fireworks",
+ "langchain-groq",
+ "langchain-huggingface",
+ "langchain-mistralai",
+ "langchain-model-profiles",
+ "langchain-nomic",
+ "langchain-ollama",
  "langchain-openai",
+ "langchain-openrouter",
+ "langchain-perplexity",
  "langchain-text-splitters",
+ "langchain-xai",
  "serde_json",
  "tokio",
  "wiremock",
@@ -543,10 +555,25 @@ dependencies = [
 [[package]]
 name = "langchain-anthropic"
 version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "langchain-core",
+ "reqwest",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "tokio",
+ "wiremock",
+]
 
 [[package]]
 name = "langchain-chroma"
 version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "langchain-core",
+ "tokio",
+]
 
 [[package]]
 name = "langchain-classic"
@@ -567,26 +594,68 @@ dependencies = [
 [[package]]
 name = "langchain-deepseek"
 version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "langchain-core",
+ "langchain-openai",
+ "serde_json",
+ "tokio",
+ "wiremock",
+]
 
 [[package]]
 name = "langchain-exa"
 version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "langchain-core",
+ "serde",
+ "serde_json",
+ "tokio",
+]
 
 [[package]]
 name = "langchain-fireworks"
 version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "langchain-core",
+ "langchain-openai",
+ "serde_json",
+ "tokio",
+]
 
 [[package]]
 name = "langchain-groq"
 version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "langchain-core",
+ "langchain-openai",
+ "serde_json",
+ "tokio",
+]
 
 [[package]]
 name = "langchain-huggingface"
 version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "langchain-core",
+ "serde_json",
+ "tokio",
+]
 
 [[package]]
 name = "langchain-mistralai"
 version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "langchain-core",
+ "langchain-openai",
+ "serde_json",
+ "tokio",
+]
 
 [[package]]
 name = "langchain-model-profiles"
@@ -595,10 +664,22 @@ version = "0.1.0"
 [[package]]
 name = "langchain-nomic"
 version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "langchain-core",
+ "tokio",
+]
 
 [[package]]
 name = "langchain-ollama"
 version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "langchain-core",
+ "langchain-openai",
+ "serde_json",
+ "wiremock",
+]
 
 [[package]]
 name = "langchain-openai"
@@ -618,14 +699,33 @@ dependencies = [
 [[package]]
 name = "langchain-openrouter"
 version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "langchain-core",
+ "langchain-openai",
+ "serde_json",
+ "tokio",
+]
 
 [[package]]
 name = "langchain-perplexity"
 version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "langchain-core",
+ "serde",
+ "serde_json",
+ "tokio",
+]
 
 [[package]]
 name = "langchain-qdrant"
 version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "langchain-core",
+ "tokio",
+]
 
 [[package]]
 name = "langchain-tests"
@@ -648,6 +748,13 @@ dependencies = [
 [[package]]
 name = "langchain-xai"
 version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "langchain-core",
+ "langchain-openai",
+ "serde_json",
+ "tokio",
+]
 
 [[package]]
 name = "lazy_static"

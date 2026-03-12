@@ -40,8 +40,6 @@ pub mod vectorstores {
 
 pub use langchain_core::LangChainError;
 
-const DEFAULT_OPENAI_BASE_URL: &str = "https://api.openai.com/v1";
-
 #[derive(Debug, Clone, Default)]
 pub struct ModelInitOptions {
     provider: Option<String>,
@@ -73,9 +71,7 @@ pub fn init_chat_model(
     chat_models::init_chat_model(
         model,
         options.provider.as_deref(),
-        options
-            .base_url
-            .unwrap_or_else(|| DEFAULT_OPENAI_BASE_URL.to_owned()),
+        options.base_url.as_deref(),
         options.api_key.as_deref(),
     )
 }
@@ -87,9 +83,7 @@ pub fn init_configurable_chat_model(
     chat_models::init_configurable_chat_model(
         default_model,
         options.provider.as_deref(),
-        options
-            .base_url
-            .unwrap_or_else(|| DEFAULT_OPENAI_BASE_URL.to_owned()),
+        options.base_url.as_deref(),
         options.api_key.as_deref(),
     )
 }
@@ -107,9 +101,7 @@ pub fn init_embeddings(
     embeddings::init_embeddings(
         model,
         options.provider.as_deref(),
-        options
-            .base_url
-            .unwrap_or_else(|| DEFAULT_OPENAI_BASE_URL.to_owned()),
+        options.base_url.as_deref(),
         options.api_key.as_deref(),
     )
 }

@@ -1,17 +1,14 @@
-//! Placeholder Perplexity integration crate.
-//! Mirrors `.ref/langchain/libs/partners/perplexity` from the Python reference monorepo.
+mod chat_models;
+mod output_parsers;
+mod retrievers;
+mod tools;
+mod types;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct IntegrationDescriptor {
-    pub provider: &'static str,
-    pub reference_path: &'static str,
-}
-
-pub const INTEGRATION: IntegrationDescriptor = IntegrationDescriptor {
-    provider: "perplexity",
-    reference_path: "libs/partners/perplexity",
+pub use chat_models::ChatPerplexity;
+pub use output_parsers::{
+    ParsedReasoningOutput, ReasoningJsonOutputParser, ReasoningStructuredOutputParser,
+    strip_think_tags,
 };
-
-pub fn integration_descriptor() -> IntegrationDescriptor {
-    INTEGRATION
-}
+pub use retrievers::PerplexitySearchRetriever;
+pub use tools::{PerplexitySearchHit, PerplexitySearchResults};
+pub use types::{MediaResponse, MediaResponseOverrides, UserLocation, WebSearchOptions};

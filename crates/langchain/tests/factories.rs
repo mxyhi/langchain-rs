@@ -437,3 +437,124 @@ async fn init_chat_model_trait_object_supports_structured_output() {
         })
     );
 }
+
+#[tokio::test]
+async fn init_chat_model_infers_anthropic_provider_from_model_prefix() {
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .and(body_json(json!({
+            "model": "claude-3-7-sonnet-latest",
+            "max_tokens": 1024,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        { "type": "text", "text": "ping" }
+                    ]
+                }
+            ]
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id": "msg_factory_anthropic",
+            "model": "claude-3-7-sonnet-latest",
+            "content": [
+                { "type": "text", "text": "pong" }
+            ]
+        })))
+        .mount(&server)
+        .await;
+
+    let model = init_chat_model(
+        "claude-3-7-sonnet-latest",
+        ModelInitOptions::default().with_base_url(server.uri()),
+    )
+    .expect("anthropic inference should succeed");
+    let response = model
+        .invoke(vec![HumanMessage::new("ping").into()], Default::default())
+        .await
+        .expect("anthropic chat model should invoke");
+
+    assert_eq!(response.content(), "pong");
+}
+
+#[tokio::test]
+async fn configurable_chat_model_runtime_base_url_override_beats_provider_default() {
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .and(body_json(json!({
+            "model": "deepseek-chat",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "ping"
+                }
+            ]
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id": "chatcmpl_runtime_override",
+            "model": "deepseek-chat",
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": "pong"
+                    }
+                }
+            ]
+        })))
+        .mount(&server)
+        .await;
+
+    let configurable = init_configurable_chat_model(None, ModelInitOptions::default());
+    let response = configurable
+        .invoke(
+            vec![HumanMessage::new("ping").into()],
+            langchain::runnables::RunnableConfig {
+                configurable: BTreeMap::from([
+                    ("model".to_owned(), json!("deepseek-chat")),
+                    ("provider".to_owned(), json!("deepseek")),
+                    ("base_url".to_owned(), json!(server.uri())),
+                ]),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("runtime base_url override should route request to mock server");
+
+    assert_eq!(response.content(), "pong");
+}
+
+#[tokio::test]
+async fn init_embeddings_supports_registered_provider_default_resolution() {
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/embeddings"))
+        .and(body_json(json!({
+            "model": "mistral-embed",
+            "input": ["hello"]
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": [
+                { "embedding": [0.8, 0.9] }
+            ]
+        })))
+        .mount(&server)
+        .await;
+
+    let embeddings = init_embeddings(
+        "mistralai:mistral-embed",
+        ModelInitOptions::default().with_base_url(server.uri()),
+    )
+    .expect("registered embeddings provider should resolve");
+    let response = embeddings
+        .embed_query("hello")
+        .await
+        .expect("embedding query should succeed");
+
+    assert_eq!(response, vec![0.8, 0.9]);
+}

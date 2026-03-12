@@ -5,3 +5,10 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+futures-util.workspace = true
+langchain-core = { path = "../../crates/langchain-core" }
+langchain-openai = { path = "../langchain-openai" }
+serde_json.workspace = true
+
+[dev-dependencies]
+wiremock.workspace = true

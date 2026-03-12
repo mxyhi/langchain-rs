@@ -7,8 +7,20 @@ license.workspace = true
 [dependencies]
 futures-util.workspace = true
 langchain-core = { path = "../langchain-core" }
+langchain-model-profiles = { path = "../langchain-model-profiles" }
 langchain-text-splitters = { path = "../langchain-text-splitters" }
+langchain-anthropic = { path = "../../providers/langchain-anthropic" }
+langchain-deepseek = { path = "../../providers/langchain-deepseek" }
+langchain-fireworks = { path = "../../providers/langchain-fireworks" }
+langchain-groq = { path = "../../providers/langchain-groq" }
+langchain-huggingface = { path = "../../providers/langchain-huggingface" }
+langchain-mistralai = { path = "../../providers/langchain-mistralai" }
+langchain-nomic = { path = "../../providers/langchain-nomic" }
+langchain-ollama = { path = "../../providers/langchain-ollama" }
 langchain-openai = { path = "../../providers/langchain-openai" }
+langchain-openrouter = { path = "../../providers/langchain-openrouter" }
+langchain-perplexity = { path = "../../providers/langchain-perplexity" }
+langchain-xai = { path = "../../providers/langchain-xai" }
 serde_json.workspace = true
 
 [dev-dependencies]

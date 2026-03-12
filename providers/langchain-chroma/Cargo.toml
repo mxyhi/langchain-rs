@@ -5,3 +5,8 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+futures-util.workspace = true
+langchain-core = { path = "../../crates/langchain-core" }
+
+[dev-dependencies]
+tokio.workspace = true

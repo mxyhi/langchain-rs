@@ -99,6 +99,10 @@ impl OpenAI {
         self
     }
 
+    pub fn base_url(&self) -> &str {
+        self.config.base_url()
+    }
+
     fn request_body(&self, prompts: Vec<String>) -> CompletionRequest {
         CompletionRequest {
             model: self.model.clone(),

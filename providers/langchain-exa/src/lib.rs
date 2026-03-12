@@ -1,17 +1,7 @@
-//! Placeholder Exa integration crate.
-//! Mirrors `.ref/langchain/libs/partners/exa` from the Python reference monorepo.
+mod retrievers;
+mod tools;
+mod types;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct IntegrationDescriptor {
-    pub provider: &'static str,
-    pub reference_path: &'static str,
-}
-
-pub const INTEGRATION: IntegrationDescriptor = IntegrationDescriptor {
-    provider: "exa",
-    reference_path: "libs/partners/exa",
-};
-
-pub fn integration_descriptor() -> IntegrationDescriptor {
-    INTEGRATION
-}
+pub use retrievers::ExaSearchRetriever;
+pub use tools::{ExaFindSimilarResults, ExaSearchResults, SearchHit};
+pub use types::{HighlightsContentsOptions, TextContentsOptions};

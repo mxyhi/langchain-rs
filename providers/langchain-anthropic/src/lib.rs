@@ -1,18 +1,6 @@
-//! Placeholder Anthropic integration crate.
-//! Mirrors `.ref/langchain/libs/partners/anthropic` from the Python reference monorepo.
+mod chat_models;
+mod client;
+mod llms;
 
-/// Describes the current migration status of this provider crate.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct IntegrationDescriptor {
-    pub provider: &'static str,
-    pub reference_path: &'static str,
-}
-
-pub const INTEGRATION: IntegrationDescriptor = IntegrationDescriptor {
-    provider: "anthropic",
-    reference_path: "libs/partners/anthropic",
-};
-
-pub fn integration_descriptor() -> IntegrationDescriptor {
-    INTEGRATION
-}
+pub use chat_models::{AnthropicToolDefinition, ChatAnthropic, convert_to_anthropic_tool};
+pub use llms::AnthropicLLM;

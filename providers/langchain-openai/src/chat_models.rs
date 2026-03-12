@@ -47,6 +47,10 @@ impl ChatOpenAI {
         self
     }
 
+    pub fn base_url(&self) -> &str {
+        self.config.base_url()
+    }
+
     pub fn with_tool_choice(mut self, tool_name: impl Into<String>) -> Self {
         self.tool_choice = Some(ToolChoice::Named(tool_name.into()));
         self
