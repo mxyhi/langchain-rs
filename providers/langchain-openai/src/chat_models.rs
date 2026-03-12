@@ -5,17 +5,15 @@ use langchain_core::LangChainError;
 use langchain_core::language_models::BaseChatModel;
 use langchain_core::messages::{AIMessage, BaseMessage, ResponseMetadata, UsageMetadata};
 use langchain_core::runnables::RunnableConfig;
-use reqwest::Client;
-use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::client::OpenAIClientConfig;
+
 #[derive(Debug, Clone)]
 pub struct ChatOpenAI {
-    client: Client,
+    config: OpenAIClientConfig,
     model: String,
-    base_url: String,
-    api_key: Option<SecretString>,
 }
 
 impl ChatOpenAI {
@@ -25,15 +23,9 @@ impl ChatOpenAI {
         api_key: Option<impl AsRef<str>>,
     ) -> Self {
         Self {
-            client: Client::new(),
+            config: OpenAIClientConfig::new(reqwest::Client::new(), base_url, api_key),
             model: model.into(),
-            base_url: base_url.into().trim_end_matches('/').to_owned(),
-            api_key: api_key.map(|key| SecretString::new(key.as_ref().to_owned().into())),
         }
-    }
-
-    fn endpoint(&self) -> String {
-        format!("{}/chat/completions", self.base_url)
     }
 }
 
@@ -53,12 +45,10 @@ impl BaseChatModel for ChatOpenAI {
                 messages: messages.iter().map(OpenAIMessage::from_langchain).collect(),
             };
 
-            let mut builder = self.client.post(self.endpoint()).json(&request);
-            if let Some(api_key) = &self.api_key {
-                builder = builder.bearer_auth(api_key.expose_secret());
-            }
-
-            let response = builder
+            let response = self
+                .config
+                .post("chat/completions")
+                .json(&request)
                 .send()
                 .await
                 .map_err(|error| LangChainError::request(error.to_string()))?;

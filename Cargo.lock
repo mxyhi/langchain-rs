@@ -533,6 +533,7 @@ version = "0.1.0"
 dependencies = [
  "langchain-core",
  "langchain-text-splitters",
+ "tokio",
 ]
 
 [[package]]
@@ -626,7 +627,9 @@ version = "0.1.0"
 name = "langchain-tests"
 version = "0.1.0"
 dependencies = [
+ "futures-util",
  "langchain-core",
+ "tokio",
 ]
 
 [[package]]

@@ -7,3 +7,6 @@ license.workspace = true
 [dependencies]
 langchain-core = { path = "../langchain-core" }
 langchain-text-splitters = { path = "../langchain-text-splitters" }
+
+[dev-dependencies]
+tokio.workspace = true
