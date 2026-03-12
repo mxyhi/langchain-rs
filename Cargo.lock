@@ -583,6 +583,7 @@ dependencies = [
  "langchain",
  "langchain-core",
  "langchain-text-splitters",
+ "serde_json",
  "tokio",
 ]
 

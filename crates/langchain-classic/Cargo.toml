@@ -9,6 +9,8 @@ futures-util.workspace = true
 langchain = { path = "../langchain" }
 langchain-core = { path = "../langchain-core" }
 langchain-text-splitters = { path = "../langchain-text-splitters" }
+serde_json.workspace = true
 
 [dev-dependencies]
+serde_json.workspace = true
 tokio.workspace = true

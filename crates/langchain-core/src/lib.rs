@@ -1,8 +1,11 @@
+pub mod agents;
 pub mod caches;
 pub mod chat_history;
+pub mod chat_loaders;
 pub mod chat_sessions;
 pub mod documents;
 pub mod embeddings;
+pub mod env;
 mod error;
 pub mod exceptions;
 pub mod globals;
@@ -15,7 +18,11 @@ pub mod prompts;
 pub mod rate_limiters;
 pub mod retrievers;
 pub mod runnables;
+pub mod stores;
+pub mod structured_query;
+pub mod sys_info;
 pub mod tools;
+pub mod utils;
 pub mod vectorstores;
 pub mod version;
 

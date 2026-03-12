@@ -216,6 +216,8 @@ pub trait BaseChatModel: Send + Sync {
     }
 }
 
+pub type BaseLanguageModel = dyn BaseChatModel;
+
 impl<T> BaseChatModel for Box<T>
 where
     T: BaseChatModel + ?Sized,

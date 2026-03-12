@@ -5,6 +5,8 @@
 //! facade crates. The implementation is intentionally minimal for now, but the
 //! package boundary is real and ready to absorb classic-only modules later.
 
+pub mod base_language;
+pub mod base_memory;
 pub mod chains;
 
 pub mod agents {
@@ -40,9 +42,15 @@ pub mod embeddings {
     pub use langchain_core::embeddings::*;
 }
 
+pub mod env;
+
+pub mod formatting;
+
 pub mod globals {
     pub use langchain_core::globals::*;
 }
+
+pub mod input;
 
 pub mod language_models {
     pub use langchain_core::language_models::*;
