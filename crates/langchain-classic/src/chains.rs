@@ -7,6 +7,8 @@ use langchain_core::prompts::{
 };
 use langchain_core::runnables::{Runnable, RunnableConfig};
 
+pub use crate::example_generator::generate_example;
+
 pub struct LLMChain {
     llm: Box<dyn BaseLLM>,
     prompt: PromptTemplate,

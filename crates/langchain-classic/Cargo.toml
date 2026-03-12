@@ -9,8 +9,13 @@ futures-util.workspace = true
 langchain = { path = "../langchain" }
 langchain-core = { path = "../langchain-core" }
 langchain-text-splitters = { path = "../langchain-text-splitters" }
+reqwest.workspace = true
+rusqlite.workspace = true
 serde_json.workspace = true
+tokio.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true
+tempfile.workspace = true
 tokio.workspace = true
+wiremock.workspace = true

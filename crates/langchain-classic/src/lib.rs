@@ -8,6 +8,7 @@
 pub mod base_language;
 pub mod base_memory;
 pub mod chains;
+pub mod example_generator;
 
 pub mod agents {
     pub use langchain::agents::*;
@@ -44,6 +45,8 @@ pub mod embeddings {
 
 pub mod env;
 
+pub mod hub;
+
 pub mod formatting;
 
 pub mod globals {
@@ -64,9 +67,13 @@ pub mod messages {
     pub use langchain_core::messages::*;
 }
 
+pub mod model_laboratory;
+
 pub mod output_parsers {
     pub use langchain_core::output_parsers::*;
 }
+
+pub mod python;
 
 pub mod prompt_values {
     pub use langchain_core::prompt_values::*;
@@ -80,9 +87,13 @@ pub mod retrievers {
     pub use langchain_core::retrievers::*;
 }
 
+pub mod requests;
+
 pub mod runnables {
     pub use langchain_core::runnables::*;
 }
+
+pub mod serpapi;
 
 pub mod text_splitter {
     pub use langchain_text_splitters::{
@@ -90,6 +101,8 @@ pub mod text_splitter {
         TokenTextSplitter, Tokenizer, split_text_on_tokens,
     };
 }
+
+pub mod sql_database;
 
 pub mod tools {
     pub use langchain_core::tools::*;
@@ -107,6 +120,10 @@ pub mod docstore {
 }
 
 pub mod utilities {
+    pub use crate::python::PythonREPL;
+    pub use crate::requests::{Requests, RequestsWrapper, TextRequestsWrapper};
+    pub use crate::serpapi::SerpAPIWrapper;
+    pub use crate::sql_database::SQLDatabase;
     pub use langchain_core::messages::{message_to_dict, messages_to_dict, trim_messages};
 }
 
