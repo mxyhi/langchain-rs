@@ -18,6 +18,14 @@ pub mod cache {
     pub use langchain_core::caches::*;
 }
 
+pub mod callbacks {
+    pub use langchain_core::callbacks::*;
+}
+
+pub mod chat_loaders {
+    pub use langchain_core::chat_loaders::*;
+}
+
 pub mod chat_models {
     pub use langchain::chat_models::{
         ChatAnthropic, ChatDeepSeek, ChatFireworks, ChatGroq, ChatHuggingFace, ChatMistralAI,
@@ -77,11 +85,19 @@ pub mod output_parsers {
 
 pub mod python;
 
+pub mod load {
+    pub use langchain_core::load::*;
+}
+
 pub mod prompt_values {
     pub use langchain_core::prompt_values::*;
 }
 
 pub mod prompts;
+
+pub mod example_selectors {
+    pub use langchain_core::example_selectors::*;
+}
 
 pub mod retrievers {
     pub use langchain_core::retrievers::*;
@@ -119,12 +135,34 @@ pub mod docstore {
     pub use langchain_core::documents::Document;
 }
 
+pub mod storage {
+    pub use langchain_core::stores::*;
+}
+
+pub mod document_loaders {
+    pub use langchain_core::document_loaders::*;
+}
+
+pub mod indexing {
+    pub use langchain_core::indexing::*;
+}
+
 pub mod utilities {
     pub use crate::python::PythonREPL;
     pub use crate::requests::{Requests, RequestsWrapper, TextRequestsWrapper};
     pub use crate::serpapi::SerpAPIWrapper;
     pub use crate::sql_database::SQLDatabase;
     pub use langchain_core::messages::{message_to_dict, messages_to_dict, trim_messages};
+}
+
+pub mod utils {
+    pub mod formatting {
+        pub use crate::formatting::*;
+    }
+
+    pub mod input {
+        pub use crate::input::*;
+    }
 }
 
 pub mod vectorstores {

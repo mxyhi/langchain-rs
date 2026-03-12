@@ -27,6 +27,9 @@ pub enum Language {
     PlainText,
     Markdown,
     Html,
+    Json,
+    Jsx,
+    Latex,
     Python,
     JavaScript,
 }
@@ -101,6 +104,9 @@ impl TokenTextSplitter {
             Language::PlainText
             | Language::Markdown
             | Language::Html
+            | Language::Json
+            | Language::Jsx
+            | Language::Latex
             | Language::Python
             | Language::JavaScript => Tokenizer::whitespace(),
         };

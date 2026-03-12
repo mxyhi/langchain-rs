@@ -1,3 +1,5 @@
+pub mod cli;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ProviderCapabilities {
     pub chat_model: bool,
@@ -93,11 +95,14 @@ const FIREWORKS_CAPABILITIES: ProviderCapabilities = ProviderCapabilities::new()
     .with_chat_model()
     .with_llm()
     .with_embeddings();
-const HUGGINGFACE_CAPABILITIES: ProviderCapabilities = ProviderCapabilities::new();
+const HUGGINGFACE_CAPABILITIES: ProviderCapabilities = ProviderCapabilities::new()
+    .with_chat_model()
+    .with_llm()
+    .with_embeddings();
 const MISTRAL_CAPABILITIES: ProviderCapabilities = ProviderCapabilities::new()
     .with_chat_model()
     .with_embeddings();
-const NOMIC_CAPABILITIES: ProviderCapabilities = ProviderCapabilities::new();
+const NOMIC_CAPABILITIES: ProviderCapabilities = ProviderCapabilities::new().with_embeddings();
 const EXA_CAPABILITIES: ProviderCapabilities = ProviderCapabilities::new()
     .with_retriever()
     .with_parser_or_tooling();
@@ -106,6 +111,7 @@ const QDRANT_CAPABILITIES: ProviderCapabilities = ProviderCapabilities::new()
     .with_embeddings();
 const CHROMA_CAPABILITIES: ProviderCapabilities = ProviderCapabilities::new().with_vector_store();
 const PERPLEXITY_CAPABILITIES: ProviderCapabilities = ProviderCapabilities::new()
+    .with_chat_model()
     .with_retriever()
     .with_parser_or_tooling();
 
@@ -191,7 +197,7 @@ pub const PROVIDERS: &[ProviderProfile] = &[
     ProviderProfile {
         key: "nomic",
         package_name: "langchain-nomic",
-        default_base_url: None,
+        default_base_url: Some("https://api-atlas.nomic.ai"),
         chat_model_prefixes: &[],
         capabilities: NOMIC_CAPABILITIES,
         exports: &["NomicEmbeddings"],
@@ -360,12 +366,12 @@ mod tests {
 
         assert!(chat.contains(&"openai"));
         assert!(chat.contains(&"anthropic"));
-        assert!(!chat.contains(&"huggingface"));
-        assert!(!chat.contains(&"perplexity"));
+        assert!(chat.contains(&"huggingface"));
+        assert!(chat.contains(&"perplexity"));
         assert!(embeddings.contains(&"openai"));
         assert!(embeddings.contains(&"mistralai"));
-        assert!(!embeddings.contains(&"huggingface"));
-        assert!(!embeddings.contains(&"nomic"));
+        assert!(embeddings.contains(&"huggingface"));
+        assert!(embeddings.contains(&"nomic"));
         assert!(!embeddings.contains(&"anthropic"));
     }
 

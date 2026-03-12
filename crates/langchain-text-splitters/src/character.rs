@@ -48,6 +48,14 @@ impl RecursiveCharacterTextSplitter {
         }
     }
 
+    pub fn from_language(
+        language: crate::base::Language,
+        chunk_size: usize,
+        chunk_overlap: usize,
+    ) -> Self {
+        Self::new(chunk_size, chunk_overlap, separators_for_language(language))
+    }
+
     fn split_with_separator(&self, text: &str, separator_index: usize) -> Vec<String> {
         if text.chars().count() <= self.chunk_size {
             return vec![text.to_owned()];
@@ -142,4 +150,40 @@ fn fallback_split(text: &str, chunk_size: usize, chunk_overlap: usize) -> Vec<St
     }
 
     chunks
+}
+
+fn separators_for_language(language: crate::base::Language) -> Vec<String> {
+    match language {
+        crate::base::Language::PlainText => {
+            vec!["\n\n".to_owned(), "\n".to_owned(), " ".to_owned()]
+        }
+        crate::base::Language::Markdown => vec!["\n\n".to_owned(), "\n".to_owned(), " ".to_owned()],
+        crate::base::Language::Html => vec![
+            "</article>".to_owned(),
+            "</section>".to_owned(),
+            "</div>".to_owned(),
+            "</p>".to_owned(),
+            "\n".to_owned(),
+            " ".to_owned(),
+        ],
+        crate::base::Language::Json => vec!["},".to_owned(), ",".to_owned(), " ".to_owned()],
+        crate::base::Language::Jsx => vec![
+            "\n\n".to_owned(),
+            ";\n".to_owned(),
+            "\n".to_owned(),
+            " ".to_owned(),
+        ],
+        crate::base::Language::Latex => vec![
+            "\n\n".to_owned(),
+            "\n\\section".to_owned(),
+            "\n\\subsection".to_owned(),
+            "\n\\begin".to_owned(),
+            "\n".to_owned(),
+            " ".to_owned(),
+        ],
+        crate::base::Language::Python => vec!["\n\n".to_owned(), "\n".to_owned(), " ".to_owned()],
+        crate::base::Language::JavaScript => {
+            vec!["\n\n".to_owned(), "\n".to_owned(), " ".to_owned()]
+        }
+    }
 }

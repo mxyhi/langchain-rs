@@ -3,18 +3,31 @@ use std::sync::Arc;
 use langchain_classic::base_language::BaseLanguageModel;
 use langchain_classic::base_memory::BaseMemory;
 use langchain_classic::cache::InMemoryCache;
+use langchain_classic::callbacks::{
+    CallbackEvent, CallbackEventKind, CallbackRun, CallbackRunConfig,
+};
+use langchain_classic::chat_loaders::BaseChatLoader;
+use langchain_classic::document_loaders::BaseLoader;
 use langchain_classic::env::get_runtime_environment;
 use langchain_classic::formatting::{StrictFormatter, formatter};
 use langchain_classic::globals::{
     get_debug, get_llm_cache, get_verbose, set_debug, set_llm_cache, set_verbose,
 };
+use langchain_classic::indexing::{InMemoryRecordManager, index};
 use langchain_classic::input::{get_bolded_text, get_color_mapping, get_colored_text};
+use langchain_classic::load::{Reviver, SerializedValue, dumpd};
+use langchain_classic::messages::HumanMessage;
 use langchain_classic::prompts::PromptArgument;
+use langchain_classic::storage::{BaseStore, InMemoryStore};
 use langchain_classic::text_splitter::{
     CharacterTextSplitter, RecursiveCharacterTextSplitter, TextSplitter, TokenTextSplitter,
     Tokenizer, split_text_on_tokens,
 };
 use langchain_classic::{Prompt, PromptTemplate};
+use langchain_core::chat_sessions::ChatSession;
+use langchain_core::documents::Document;
+use langchain_core::embeddings::CharacterEmbeddings;
+use langchain_core::vectorstores::{InMemoryVectorStore, VectorStore};
 use serde_json::{Value, json};
 
 #[derive(Default)]
@@ -51,6 +64,21 @@ impl BaseMemory for RecorderMemory {
 
     fn clear(&self) {
         self.values.lock().expect("memory lock").clear();
+    }
+}
+
+struct StaticChatLoader;
+
+impl BaseChatLoader for StaticChatLoader {
+    fn lazy_load<'a>(&'a self) -> Box<dyn Iterator<Item = ChatSession> + 'a> {
+        Box::new(
+            vec![
+                ChatSession::new()
+                    .with_messages(vec![HumanMessage::new("hello").into()])
+                    .with_functions(vec![json!({"name": "lookup"})]),
+            ]
+            .into_iter(),
+        )
     }
 }
 
@@ -176,4 +204,81 @@ async fn classic_base_memory_trait_supports_sync_and_async_paths() {
     );
     memory.clear();
     assert!(memory.memory_variables().is_empty());
+}
+
+#[tokio::test]
+async fn classic_reexports_callbacks_chat_loaders_load_storage_and_utils() {
+    let run = CallbackRun::from_config(CallbackRunConfig::default().with_name("classic"));
+    let event = CallbackEvent::custom("custom", json!({"ok": true}), Some(run.id()));
+    assert_eq!(event.kind(), CallbackEventKind::Custom);
+    assert_eq!(event.run_id(), run.id());
+
+    let loader = StaticChatLoader;
+    let sessions = loader.load();
+    assert_eq!(sessions.len(), 1);
+    assert_eq!(sessions[0].messages()[0].content(), "hello");
+    assert_eq!(sessions[0].functions()[0]["name"], "lookup");
+
+    let serialized = dumpd(&HumanMessage::new("hello")).expect("dumpd should serialize");
+    match &serialized {
+        SerializedValue::Constructor { id, .. } => {
+            assert_eq!(id.last().map(String::as_str), Some("HumanMessage"));
+        }
+        SerializedValue::NotImplemented { .. } => {
+            panic!("human message should serialize as constructor")
+        }
+    }
+    let revived = Reviver::core()
+        .revive(serialized)
+        .expect("reviver should reconstruct human messages");
+    assert_eq!(
+        revived.lc_id().last().map(String::as_str),
+        Some("HumanMessage")
+    );
+
+    let store = InMemoryStore::<Value>::new();
+    store.mset(vec![("alpha".to_owned(), json!("A"))]);
+    assert_eq!(store.mget(&["alpha".to_owned()])[0], Some(json!("A")));
+    store.amset(vec![("beta".to_owned(), json!("B"))]).await;
+    assert_eq!(
+        store.amget(vec!["beta".to_owned()]).await[0],
+        Some(json!("B"))
+    );
+
+    let formatted = langchain_classic::utils::formatting::formatter()
+        .format(
+            "Hello {name}",
+            &[("name".to_owned(), "Rust".to_owned())].into(),
+        )
+        .expect("nested utils formatting facade should render");
+    assert_eq!(formatted, "Hello Rust");
+    assert!(langchain_classic::utils::input::get_bolded_text("hi").contains("hi"));
+}
+
+#[tokio::test]
+async fn classic_reexports_document_loaders_and_indexing() {
+    let loader =
+        langchain_classic::document_loaders::StaticDocumentLoader::new(vec![Document::new(
+            "classic document loader",
+        )]);
+    let loaded = loader.load().await.expect("document loader should work");
+    assert_eq!(loaded[0].page_content, "classic document loader");
+
+    let mut vector_store = InMemoryVectorStore::new(CharacterEmbeddings::new());
+    let mut record_manager = InMemoryRecordManager::new("classic");
+    let result = index(
+        vec![Document::new("classic indexing")],
+        &mut vector_store,
+        &mut record_manager,
+        false,
+    )
+    .await
+    .expect("classic indexing should work");
+    assert_eq!(result.num_added, 1);
+
+    let docs = vector_store
+        .similarity_search("classic", 1)
+        .await
+        .expect("similarity search should work");
+    assert_eq!(docs.len(), 1);
 }
