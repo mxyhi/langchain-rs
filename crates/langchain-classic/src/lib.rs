@@ -63,6 +63,8 @@ pub mod llms {
     pub use langchain_core::language_models::{BaseLLM, ParrotLLM};
 }
 
+pub mod memory;
+
 pub mod messages {
     pub use langchain_core::messages::*;
 }
@@ -79,9 +81,7 @@ pub mod prompt_values {
     pub use langchain_core::prompt_values::*;
 }
 
-pub mod prompts {
-    pub use langchain_core::prompts::*;
-}
+pub mod prompts;
 
 pub mod retrievers {
     pub use langchain_core::retrievers::*;
@@ -133,8 +133,7 @@ pub mod vectorstores {
 
 pub use chains::{ConversationChain, LLMChain};
 pub use langchain_core::LangChainError;
-pub use langchain_core::prompts::PromptTemplate;
-pub use langchain_core::prompts::PromptTemplate as Prompt;
+pub use prompts::{Prompt, PromptTemplate};
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Marker type for the classic/legacy package boundary.
