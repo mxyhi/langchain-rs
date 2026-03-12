@@ -5,9 +5,11 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+futures-util.workspace = true
 langchain-core = { path = "../langchain-core" }
 langchain-text-splitters = { path = "../langchain-text-splitters" }
 langchain-openai = { path = "../../providers/langchain-openai" }
+serde_json.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true

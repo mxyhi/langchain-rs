@@ -1,7 +1,14 @@
+use std::collections::BTreeMap;
+
 use langchain::embeddings::Embeddings;
+use langchain::language_models::{
+    BaseChatModel, StructuredOutput, StructuredOutputOptions, StructuredOutputSchema,
+    ToolBindingOptions, ToolChoice,
+};
 use langchain::messages::HumanMessage;
 use langchain::runnables::Runnable;
-use langchain::{ModelInitOptions, init_chat_model, init_embeddings};
+use langchain::tools::tool;
+use langchain::{ModelInitOptions, init_chat_model, init_configurable_chat_model, init_embeddings};
 use serde_json::json;
 use wiremock::matchers::{body_json, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -47,6 +54,205 @@ async fn init_chat_model_supports_provider_prefixed_model_name() {
         .expect("chat model should invoke");
 
     assert_eq!(message.content(), "pong");
+}
+
+#[tokio::test]
+async fn configurable_chat_model_replays_bound_tools_at_runtime() {
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .and(body_json(json!({
+            "model": "gpt-4o-mini",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "check the weather"
+                }
+            ],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "get_weather",
+                        "description": "Get the current weather",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "city": { "type": "string" }
+                            },
+                            "required": ["city"]
+                        }
+                    }
+                }
+            ],
+            "tool_choice": {
+                "type": "function",
+                "function": {
+                    "name": "get_weather"
+                }
+            },
+            "parallel_tool_calls": false
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id": "chatcmpl_configurable_tool",
+            "model": "gpt-4o-mini",
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": null,
+                        "tool_calls": [
+                            {
+                                "id": "call_weather_1",
+                                "type": "function",
+                                "function": {
+                                    "name": "get_weather",
+                                    "arguments": "{\"city\":\"Boston\"}"
+                                }
+                            }
+                        ]
+                    }
+                }
+            ]
+        })))
+        .mount(&server)
+        .await;
+
+    let configurable = init_configurable_chat_model(
+        None,
+        ModelInitOptions::default().with_base_url(server.uri()),
+    );
+    assert_eq!(configurable.queued_operation_count(), 0);
+
+    let bound = configurable.clone().bind_tools(
+        vec![
+            tool("get_weather", "Get the current weather").with_parameters(json!({
+                "type": "object",
+                "properties": {
+                    "city": { "type": "string" }
+                },
+                "required": ["city"]
+            })),
+        ],
+        ToolBindingOptions {
+            tool_choice: Some(ToolChoice::Named("get_weather".to_owned())),
+            parallel_tool_calls: Some(false),
+            ..ToolBindingOptions::default()
+        },
+    );
+    assert_eq!(configurable.queued_operation_count(), 0);
+    assert_eq!(bound.queued_operation_count(), 1);
+
+    let response = bound
+        .invoke(
+            vec![HumanMessage::new("check the weather").into()],
+            langchain::runnables::RunnableConfig {
+                configurable: BTreeMap::from([("model".to_owned(), json!("gpt-4o-mini"))]),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("configurable model should resolve and invoke");
+
+    assert_eq!(response.tool_calls().len(), 1);
+    assert_eq!(response.tool_calls()[0].name(), "get_weather");
+}
+
+#[tokio::test]
+async fn configurable_chat_model_supports_structured_output() {
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .and(body_json(json!({
+            "model": "gpt-4o-mini",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "answer the question"
+                }
+            ],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "AnswerPayload",
+                        "description": "Structured answer payload",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "answer": { "type": "string" }
+                            },
+                            "required": ["answer"]
+                        }
+                    }
+                }
+            ],
+            "tool_choice": "required",
+            "parallel_tool_calls": false
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id": "chatcmpl_configurable_structured",
+            "model": "gpt-4o-mini",
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": null,
+                        "tool_calls": [
+                            {
+                                "id": "call_answer_1",
+                                "type": "function",
+                                "function": {
+                                    "name": "AnswerPayload",
+                                    "arguments": "{\"answer\":\"Boston\"}"
+                                }
+                            }
+                        ]
+                    }
+                }
+            ]
+        })))
+        .mount(&server)
+        .await;
+
+    let configurable = init_configurable_chat_model(
+        None,
+        ModelInitOptions::default().with_base_url(server.uri()),
+    );
+    let runnable = configurable.with_structured_output(
+        StructuredOutputSchema::new(
+            "AnswerPayload",
+            json!({
+                "type": "object",
+                "properties": {
+                    "answer": { "type": "string" }
+                },
+                "required": ["answer"]
+            }),
+        )
+        .with_description("Structured answer payload"),
+        StructuredOutputOptions::default(),
+    );
+
+    let output = runnable
+        .invoke(
+            vec![HumanMessage::new("answer the question").into()],
+            langchain::runnables::RunnableConfig {
+                configurable: BTreeMap::from([("model".to_owned(), json!("gpt-4o-mini"))]),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("configurable structured output should succeed");
+
+    match output {
+        StructuredOutput::Parsed(value) => {
+            assert_eq!(value, json!({ "answer": "Boston" }));
+        }
+        StructuredOutput::Raw { .. } => panic!("expected parsed structured output"),
+    }
 }
 
 #[tokio::test]
@@ -122,5 +328,112 @@ fn init_embeddings_requires_provider_when_model_name_cannot_be_inferred() {
     assert_eq!(
         error.to_string(),
         "unsupported operation: must specify provider or use `provider:model` format for embeddings"
+    );
+}
+
+#[tokio::test]
+async fn init_chat_model_trait_object_supports_structured_output() {
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id": "chatcmpl_factory_structured",
+            "model": "gpt-4o-mini",
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": null,
+                        "tool_calls": [
+                            {
+                                "id": "call_answer_1",
+                                "type": "function",
+                                "function": {
+                                    "name": "AnswerPayload",
+                                    "arguments": "{\"answer\":\"Boston\"}"
+                                }
+                            }
+                        ]
+                    }
+                }
+            ]
+        })))
+        .mount(&server)
+        .await;
+
+    let model = init_chat_model(
+        "openai:gpt-4o-mini",
+        ModelInitOptions::default().with_base_url(server.uri()),
+    )
+    .expect("factory should create chat model");
+    let runnable = model
+        .with_structured_output(
+            StructuredOutputSchema::new(
+                "AnswerPayload",
+                json!({
+                    "type": "object",
+                    "properties": {
+                        "answer": { "type": "string" }
+                    },
+                    "required": ["answer"]
+                }),
+            )
+            .with_description("Structured answer payload"),
+            StructuredOutputOptions::default(),
+        )
+        .expect("structured output should be supported");
+
+    let output = runnable
+        .invoke_boxed(
+            vec![HumanMessage::new("answer the question").into()],
+            Default::default(),
+        )
+        .await
+        .expect("structured output invocation should succeed");
+
+    match output {
+        StructuredOutput::Parsed(value) => {
+            assert_eq!(value, json!({ "answer": "Boston" }));
+        }
+        StructuredOutput::Raw { .. } => panic!("expected parsed structured output"),
+    }
+
+    let requests = server
+        .received_requests()
+        .await
+        .expect("wiremock should expose received requests");
+    let request_body: serde_json::Value =
+        serde_json::from_slice(&requests[0].body).expect("request body should be json");
+
+    assert_eq!(requests[0].url.path(), "/chat/completions");
+    assert_eq!(
+        request_body,
+        json!({
+            "model": "gpt-4o-mini",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "answer the question"
+                }
+            ],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "AnswerPayload",
+                        "description": "Structured answer payload",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "answer": { "type": "string" }
+                            },
+                            "required": ["answer"]
+                        }
+                    }
+                }
+            ],
+            "tool_choice": "required",
+            "parallel_tool_calls": false
+        })
     );
 }

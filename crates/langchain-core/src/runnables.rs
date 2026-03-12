@@ -13,6 +13,7 @@ use crate::LangChainError;
 pub struct RunnableConfig {
     pub tags: Vec<String>,
     pub metadata: BTreeMap<String, Value>,
+    pub configurable: BTreeMap<String, Value>,
     pub max_concurrency: Option<usize>,
 }
 

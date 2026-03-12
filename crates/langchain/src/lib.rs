@@ -6,6 +6,10 @@ pub mod documents {
 
 pub mod embeddings;
 
+pub mod language_models {
+    pub use langchain_core::language_models::*;
+}
+
 pub mod messages {
     pub use langchain_core::messages::*;
 }
@@ -65,9 +69,23 @@ impl ModelInitOptions {
 pub fn init_chat_model(
     model: &str,
     options: ModelInitOptions,
-) -> Result<Box<dyn chat_models::BaseChatModel>, LangChainError> {
+) -> Result<Box<dyn language_models::BaseChatModel>, LangChainError> {
     chat_models::init_chat_model(
         model,
+        options.provider.as_deref(),
+        options
+            .base_url
+            .unwrap_or_else(|| DEFAULT_OPENAI_BASE_URL.to_owned()),
+        options.api_key.as_deref(),
+    )
+}
+
+pub fn init_configurable_chat_model(
+    default_model: Option<&str>,
+    options: ModelInitOptions,
+) -> chat_models::ConfigurableChatModel {
+    chat_models::init_configurable_chat_model(
+        default_model,
         options.provider.as_deref(),
         options
             .base_url
