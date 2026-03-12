@@ -97,8 +97,9 @@ const HUGGINGFACE_CAPABILITIES: ProviderCapabilities = ProviderCapabilities::new
     .with_chat_model()
     .with_llm()
     .with_embeddings();
-const MISTRAL_CAPABILITIES: ProviderCapabilities =
-    ProviderCapabilities::new().with_chat_model().with_embeddings();
+const MISTRAL_CAPABILITIES: ProviderCapabilities = ProviderCapabilities::new()
+    .with_chat_model()
+    .with_embeddings();
 const NOMIC_CAPABILITIES: ProviderCapabilities = ProviderCapabilities::new().with_embeddings();
 const EXA_CAPABILITIES: ProviderCapabilities = ProviderCapabilities::new()
     .with_retriever()
@@ -259,7 +260,11 @@ pub const PROVIDERS: &[ProviderProfile] = &[
         default_base_url: Some("https://api.exa.ai"),
         chat_model_prefixes: &[],
         capabilities: EXA_CAPABILITIES,
-        exports: &["ExaSearchRetriever", "ExaSearchResults", "ExaFindSimilarResults"],
+        exports: &[
+            "ExaSearchRetriever",
+            "ExaSearchResults",
+            "ExaFindSimilarResults",
+        ],
     },
 ];
 
@@ -315,7 +320,10 @@ mod tests {
         let profile = provider("openrouter").expect("provider should exist");
         assert_eq!(profile.package_name, "langchain-openrouter");
         assert!(profile.capabilities.chat_model);
-        assert_eq!(profile.default_base_url, Some("https://openrouter.ai/api/v1"));
+        assert_eq!(
+            profile.default_base_url,
+            Some("https://openrouter.ai/api/v1")
+        );
     }
 
     #[test]

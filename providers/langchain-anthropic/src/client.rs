@@ -26,7 +26,11 @@ impl AnthropicClientConfig {
     pub(crate) fn post(&self, path: &str) -> RequestBuilder {
         let builder = self
             .client
-            .post(format!("{}/{}", self.base_url, path.trim_start_matches('/')))
+            .post(format!(
+                "{}/{}",
+                self.base_url,
+                path.trim_start_matches('/')
+            ))
             .header("anthropic-version", ANTHROPIC_VERSION);
 
         match &self.api_key {

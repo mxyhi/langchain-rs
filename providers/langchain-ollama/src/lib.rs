@@ -166,10 +166,7 @@ impl OllamaEmbeddings {
 }
 
 impl Embeddings for OllamaEmbeddings {
-    fn embed_query<'a>(
-        &'a self,
-        text: &'a str,
-    ) -> BoxFuture<'a, Result<Vec<f32>, LangChainError>> {
+    fn embed_query<'a>(&'a self, text: &'a str) -> BoxFuture<'a, Result<Vec<f32>, LangChainError>> {
         self.inner.embed_query(text)
     }
 

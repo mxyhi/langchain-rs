@@ -23,30 +23,40 @@ async fn huggingface_boundaries_expose_reference_names_and_fail_honestly() {
             .expect("inference server url should exist"),
         "http://localhost:8010"
     );
-    assert_eq!(endpoint_embeddings.inference_server_url(), "http://localhost:8080");
+    assert_eq!(
+        endpoint_embeddings.inference_server_url(),
+        "http://localhost:8080"
+    );
 
-    assert!(chat
-        .generate(Vec::new(), Default::default())
-        .await
-        .expect_err("chat transport should be unsupported")
-        .to_string()
-        .contains("not implemented yet"));
-    assert!(endpoint
-        .generate(vec!["ping".to_owned()], Default::default())
-        .await
-        .expect_err("endpoint transport should be unsupported")
-        .to_string()
-        .contains("not implemented yet"));
-    assert!(pipeline
-        .generate(vec!["ping".to_owned()], Default::default())
-        .await
-        .expect_err("pipeline transport should be unsupported")
-        .to_string()
-        .contains("not implemented yet"));
-    assert!(embeddings
-        .embed_query("ping")
-        .await
-        .expect_err("embeddings transport should be unsupported")
-        .to_string()
-        .contains("not implemented yet"));
+    assert!(
+        chat.generate(Vec::new(), Default::default())
+            .await
+            .expect_err("chat transport should be unsupported")
+            .to_string()
+            .contains("not implemented yet")
+    );
+    assert!(
+        endpoint
+            .generate(vec!["ping".to_owned()], Default::default())
+            .await
+            .expect_err("endpoint transport should be unsupported")
+            .to_string()
+            .contains("not implemented yet")
+    );
+    assert!(
+        pipeline
+            .generate(vec!["ping".to_owned()], Default::default())
+            .await
+            .expect_err("pipeline transport should be unsupported")
+            .to_string()
+            .contains("not implemented yet")
+    );
+    assert!(
+        embeddings
+            .embed_query("ping")
+            .await
+            .expect_err("embeddings transport should be unsupported")
+            .to_string()
+            .contains("not implemented yet")
+    );
 }

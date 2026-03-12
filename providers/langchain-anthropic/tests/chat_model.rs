@@ -43,8 +43,7 @@ async fn invokes_anthropic_messages_and_maps_text_response() {
         .mount(&server)
         .await;
 
-    let model =
-        ChatAnthropic::new("claude-3-7-sonnet-latest", server.uri(), Some("test-key"));
+    let model = ChatAnthropic::new("claude-3-7-sonnet-latest", server.uri(), Some("test-key"));
     let message = model
         .invoke(vec![HumanMessage::new("ping").into()], Default::default())
         .await
@@ -126,7 +125,10 @@ async fn bind_tools_serializes_anthropic_tool_schema_and_parses_tool_use() {
         .expect("binding tools should succeed");
 
     let message = bound_model
-        .invoke(vec![HumanMessage::new("weather?").into()], Default::default())
+        .invoke(
+            vec![HumanMessage::new("weather?").into()],
+            Default::default(),
+        )
         .await
         .expect("tool call should parse");
 
@@ -135,12 +137,15 @@ async fn bind_tools_serializes_anthropic_tool_schema_and_parses_tool_use() {
     assert_eq!(message.tool_calls()[0].args(), &json!({ "city": "Boston" }));
 
     let converted = convert_to_anthropic_tool(&tool("lookup", "Look up data"));
-    assert_eq!(serde_json::to_value(converted).expect("tool should serialize"), json!({
-        "name": "lookup",
-        "description": "Look up data",
-        "input_schema": {
-            "type": "object",
-            "properties": {}
-        }
-    }));
+    assert_eq!(
+        serde_json::to_value(converted).expect("tool should serialize"),
+        json!({
+            "name": "lookup",
+            "description": "Look up data",
+            "input_schema": {
+                "type": "object",
+                "properties": {}
+            }
+        })
+    );
 }

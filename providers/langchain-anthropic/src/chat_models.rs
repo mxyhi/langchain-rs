@@ -2,9 +2,7 @@ use std::collections::BTreeMap;
 
 use futures_util::future::BoxFuture;
 use langchain_core::LangChainError;
-use langchain_core::language_models::{
-    BaseChatModel, ToolBindingOptions, ToolChoice,
-};
+use langchain_core::language_models::{BaseChatModel, ToolBindingOptions, ToolChoice};
 use langchain_core::messages::{
     AIMessage, BaseMessage, MessageRole, ResponseMetadata, ToolCall, UsageMetadata,
 };
@@ -55,15 +53,22 @@ impl ChatAnthropic {
         self.config.base_url()
     }
 
-    fn request(&self, messages: Vec<BaseMessage>) -> Result<AnthropicMessagesRequest, LangChainError> {
+    fn request(
+        &self,
+        messages: Vec<BaseMessage>,
+    ) -> Result<AnthropicMessagesRequest, LangChainError> {
         let mut system_parts = Vec::new();
         let mut body_messages = Vec::new();
 
         for message in messages {
             match message.role() {
                 MessageRole::System => system_parts.push(message.content().to_owned()),
-                MessageRole::Human => body_messages.push(AnthropicMessage::text("user", message.content())),
-                MessageRole::Ai => body_messages.push(AnthropicMessage::text("assistant", message.content())),
+                MessageRole::Human => {
+                    body_messages.push(AnthropicMessage::text("user", message.content()))
+                }
+                MessageRole::Ai => {
+                    body_messages.push(AnthropicMessage::text("assistant", message.content()))
+                }
                 MessageRole::Tool => body_messages.push(AnthropicMessage::tool_result(message)),
             }
         }
@@ -121,10 +126,9 @@ impl BaseChatModel for ChatAnthropic {
                 .await
                 .map_err(|error| LangChainError::request(error.to_string()))?;
 
-            let (content, tool_calls) = response
-                .content
-                .into_iter()
-                .fold((String::new(), Vec::new()), |mut state, block| {
+            let (content, tool_calls) = response.content.into_iter().fold(
+                (String::new(), Vec::new()),
+                |mut state, block| {
                     match block {
                         AnthropicContentBlock::Text { text } => state.0.push_str(&text),
                         AnthropicContentBlock::ToolUse { id, name, input } => {
@@ -132,14 +136,18 @@ impl BaseChatModel for ChatAnthropic {
                         }
                     }
                     state
-                });
+                },
+            );
 
             let mut response_metadata = ResponseMetadata::new();
             response_metadata.insert("id".to_owned(), Value::String(response.id));
             response_metadata.insert("model".to_owned(), Value::String(response.model));
             response_metadata.insert(
                 "stop_reason".to_owned(),
-                response.stop_reason.map(Value::String).unwrap_or(Value::Null),
+                response
+                    .stop_reason
+                    .map(Value::String)
+                    .unwrap_or(Value::Null),
             );
 
             Ok(AIMessage::with_metadata(
@@ -260,8 +268,13 @@ impl AnthropicMessage {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum AnthropicInputContentBlock {
-    Text { text: String },
-    ToolResult { tool_use_id: String, content: String },
+    Text {
+        text: String,
+    },
+    ToolResult {
+        tool_use_id: String,
+        content: String,
+    },
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -278,8 +291,14 @@ pub(crate) struct AnthropicMessagesResponse {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub(crate) enum AnthropicContentBlock {
-    Text { text: String },
-    ToolUse { id: String, name: String, input: Value },
+    Text {
+        text: String,
+    },
+    ToolUse {
+        id: String,
+        name: String,
+        input: Value,
+    },
 }
 
 #[derive(Debug, Clone, Deserialize)]
