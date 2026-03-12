@@ -101,7 +101,10 @@ fn middleware_types_are_constructible_and_overrideable() {
     assert_eq!(extended.jump_to(), Some(JumpTo::End));
 
     let middleware = NoopMiddleware;
-    let maybe_jump = middleware.before_agent(request.state());
+    let mut state = request.state().clone();
+    let maybe_jump = middleware
+        .before_agent(&mut state)
+        .expect("noop middleware should not fail");
     assert_eq!(maybe_jump, None);
 }
 

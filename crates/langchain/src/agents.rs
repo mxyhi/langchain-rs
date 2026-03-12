@@ -1,3 +1,6 @@
+use std::collections::BTreeMap;
+use std::sync::Arc;
+
 use futures_util::future::BoxFuture;
 use langchain_core::LangChainError;
 use langchain_core::language_models::{
@@ -17,6 +20,7 @@ pub mod structured_output;
 pub struct AgentState {
     messages: Vec<BaseMessage>,
     structured_response: Option<Value>,
+    metadata: BTreeMap<String, Value>,
 }
 
 impl AgentState {
@@ -24,11 +28,22 @@ impl AgentState {
         Self {
             messages,
             structured_response: None,
+            metadata: BTreeMap::new(),
         }
     }
 
     pub fn with_structured_response(mut self, structured_response: Value) -> Self {
         self.structured_response = Some(structured_response);
+        self
+    }
+
+    pub fn with_messages(mut self, messages: Vec<BaseMessage>) -> Self {
+        self.messages = messages;
+        self
+    }
+
+    pub fn with_metadata(mut self, key: impl Into<String>, value: Value) -> Self {
+        self.metadata.insert(key.into(), value);
         self
     }
 
@@ -38,6 +53,14 @@ impl AgentState {
 
     pub fn structured_response(&self) -> Option<&Value> {
         self.structured_response.as_ref()
+    }
+
+    pub fn metadata(&self) -> &BTreeMap<String, Value> {
+        &self.metadata
+    }
+
+    pub fn metadata_mut(&mut self) -> &mut BTreeMap<String, Value> {
+        &mut self.metadata
     }
 }
 
@@ -133,22 +156,25 @@ impl StructuredOutputValidationError {
     }
 }
 
+#[derive(Clone)]
 pub struct Agent {
-    model: Box<dyn BaseChatModel>,
+    model: Arc<dyn BaseChatModel>,
     system_prompt: Option<String>,
     tools: Vec<ToolDefinition>,
     tool_binding_options: ToolBindingOptions,
-    response_format: Option<StructuredOutputSchema>,
+    response_format: Option<structured_output::ResponseFormat>,
+    middlewares: Vec<Arc<dyn middleware::types::AgentMiddleware>>,
 }
 
 impl Agent {
     pub fn new(model: impl BaseChatModel + 'static) -> Self {
         Self {
-            model: Box::new(model),
+            model: Arc::new(model),
             system_prompt: None,
             tools: Vec::new(),
             tool_binding_options: ToolBindingOptions::default(),
             response_format: None,
+            middlewares: Vec::new(),
         }
     }
 
@@ -164,20 +190,34 @@ impl Agent {
     }
 
     pub fn with_response_format(mut self, response_format: StructuredOutputSchema) -> Self {
+        self.response_format = Some(structured_output::ResponseFormat::Auto(
+            structured_output::AutoStrategy::new(response_format),
+        ));
+        self
+    }
+
+    pub fn with_response_format_strategy(
+        mut self,
+        response_format: structured_output::ResponseFormat,
+    ) -> Self {
         self.response_format = Some(response_format);
         self
     }
 
-    fn prepare_messages(&self, input: Vec<BaseMessage>) -> Vec<BaseMessage> {
-        match &self.system_prompt {
-            Some(system_prompt) => {
-                let mut messages =
-                    vec![BaseMessage::from(SystemMessage::new(system_prompt.clone()))];
-                messages.extend(input);
-                messages
-            }
-            None => input,
-        }
+    pub fn with_middleware(
+        mut self,
+        middleware: impl middleware::types::AgentMiddleware + 'static,
+    ) -> Self {
+        self.middlewares.push(Arc::new(middleware));
+        self
+    }
+
+    pub fn with_middlewares(
+        mut self,
+        middlewares: Vec<Arc<dyn middleware::types::AgentMiddleware>>,
+    ) -> Self {
+        self.middlewares.extend(middlewares);
+        self
     }
 
     fn validate_structured_output_message(
@@ -202,17 +242,18 @@ impl Agent {
         Ok(())
     }
 
-    pub async fn invoke_messages(
+    async fn execute_model_request(
         &self,
-        input: Vec<BaseMessage>,
+        request: middleware::types::ModelRequest,
         config: RunnableConfig,
-    ) -> Result<AgentState, LangChainError> {
-        let messages = self.prepare_messages(input);
+    ) -> Result<middleware::types::ModelResponse, LangChainError> {
+        let messages = request.composed_messages();
 
-        if let Some(schema) = &self.response_format {
+        if let Some(response_format) = request.response_format() {
+            let schema = response_format.schema().clone();
             let runnable: Box<dyn RunnableDyn<Vec<BaseMessage>, StructuredOutput>> =
-                if self.tools.is_empty() {
-                    self.model.with_structured_output(
+                if request.tools().is_empty() {
+                    request.model().with_structured_output(
                         schema.clone(),
                         StructuredOutputOptions {
                             include_raw: true,
@@ -220,14 +261,15 @@ impl Agent {
                         },
                     )?
                 } else {
-                    self.model
+                    request
+                        .model()
                         .bind_tools(
-                            self.tools.clone(),
+                            request.tools().to_vec(),
                             ToolBindingOptions {
                                 response_format: Some(schema.clone()),
                                 tool_choice: Some(ToolChoice::Any),
                                 parallel_tool_calls: Some(false),
-                                ..self.tool_binding_options.clone()
+                                ..request.tool_binding_options().clone()
                             },
                         )?
                         .with_structured_output(
@@ -250,7 +292,7 @@ impl Agent {
             };
 
             if let Some(raw) = raw.as_ref() {
-                self.validate_structured_output_message(raw, schema)?;
+                self.validate_structured_output_message(raw, &schema)?;
             }
 
             if let Some(error) = parsing_error {
@@ -271,29 +313,125 @@ impl Agent {
                 );
             }
 
-            let mut state_messages = messages;
+            let mut response = middleware::types::ModelResponse::new(Vec::new());
             if let Some(raw) = raw {
-                state_messages.push(BaseMessage::from(raw));
+                response = middleware::types::ModelResponse::new(vec![BaseMessage::from(raw)]);
             }
-
-            let mut state = AgentState::new(state_messages);
             if let Some(structured_response) = structured_response {
-                state = state.with_structured_response(structured_response);
+                response = response.with_structured_response(structured_response);
             }
-            return Ok(state);
+            return Ok(response);
         }
 
-        let response = if self.tools.is_empty() {
-            self.model.generate(messages.clone(), config).await?
+        let response = if request.tools().is_empty() {
+            request.model().generate(messages, config).await?
         } else {
-            self.model
-                .bind_tools(self.tools.clone(), self.tool_binding_options.clone())?
-                .generate(messages.clone(), config)
+            request
+                .model()
+                .bind_tools(
+                    request.tools().to_vec(),
+                    request.tool_binding_options().clone(),
+                )?
+                .generate(messages, config)
                 .await?
         };
-        let mut state_messages = messages;
-        state_messages.push(BaseMessage::from(response));
-        Ok(AgentState::new(state_messages))
+        Ok(middleware::types::ModelResponse::new(vec![
+            BaseMessage::from(response),
+        ]))
+    }
+
+    pub async fn invoke_messages(
+        &self,
+        input: Vec<BaseMessage>,
+        config: RunnableConfig,
+    ) -> Result<AgentState, LangChainError> {
+        let mut request = middleware::types::ModelRequest::new(self.model.clone(), input)
+            .with_state(AgentState::new(Vec::new()))
+            .with_tools(self.tools.clone())
+            .with_tool_binding_options(self.tool_binding_options.clone());
+        if let Some(system_prompt) = &self.system_prompt {
+            request = request.with_system_message(SystemMessage::new(system_prompt.clone()));
+        }
+        if let Some(response_format) = &self.response_format {
+            request = request.with_response_format(response_format.clone());
+        }
+        request.sync_state_messages();
+
+        let mut state = request.state().clone();
+        for middleware in &self.middlewares {
+            if matches!(
+                middleware.before_agent(&mut state)?,
+                Some(middleware::types::JumpTo::End)
+            ) {
+                return Ok(state);
+            }
+        }
+        request = request.with_state(state.clone());
+
+        for middleware in &self.middlewares {
+            if matches!(
+                middleware.before_model(&mut request)?,
+                Some(middleware::types::JumpTo::End)
+            ) {
+                let mut final_state = request.state().clone();
+                final_state = final_state.with_messages(request.composed_messages());
+                return Ok(final_state);
+            }
+        }
+        request.sync_state_messages();
+        state = request.state().clone();
+
+        let config_clone = config.clone();
+        let base_handler: middleware::types::ModelCallHandler = Arc::new({
+            let agent = self.clone_for_handler();
+            move |request| {
+                let agent = agent.clone();
+                let config = config_clone.clone();
+                Box::pin(async move { agent.execute_model_request(request, config).await })
+            }
+        });
+        let wrapped_handler = self
+            .middlewares
+            .iter()
+            .rev()
+            .fold(base_handler, |next, layer| {
+                let middleware = layer.clone();
+                Arc::new(move |request| middleware.wrap_model_call(request, next.clone()))
+            });
+
+        let mut response = wrapped_handler(request.clone()).await?;
+        for middleware in &self.middlewares {
+            if matches!(
+                middleware.after_model(&mut state, &mut response)?,
+                Some(middleware::types::JumpTo::End)
+            ) {
+                break;
+            }
+        }
+
+        let mut messages = request.composed_messages();
+        messages.extend(response.result().iter().cloned());
+        let mut final_state = state.with_messages(messages);
+        if let Some(structured_response) = response.structured_response() {
+            final_state = final_state.with_structured_response(structured_response.clone());
+        }
+
+        for middleware in &self.middlewares {
+            let _ = middleware.after_agent(&mut final_state)?;
+        }
+
+        Ok(final_state)
+    }
+
+    fn clone_for_handler(&self) -> Self {
+        Self {
+            model: self.model.clone(),
+            system_prompt: self.system_prompt.clone(),
+            tools: self.tools.clone(),
+            tool_binding_options: self.tool_binding_options.clone(),
+            response_format: self.response_format.clone(),
+            middlewares: self.middlewares.clone(),
+        }
     }
 }
 

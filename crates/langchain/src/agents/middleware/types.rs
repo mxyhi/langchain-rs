@@ -1,13 +1,16 @@
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use langchain_core::language_models::{BaseChatModel, ToolChoice};
+use futures_util::future::BoxFuture;
+use langchain_core::LangChainError;
+use langchain_core::language_models::{BaseChatModel, ToolBindingOptions};
 use langchain_core::messages::{BaseMessage, SystemMessage};
 use langchain_core::tools::ToolDefinition;
 use serde_json::Value;
 
 pub use crate::agents::AgentState;
 use crate::agents::structured_output::ResponseFormat;
-pub use crate::tools::tool_node::{ToolCallRequest, ToolCallWrapper};
+pub use crate::tools::tool_node::{ToolCallHandler, ToolCallRequest, ToolCallWrapper};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JumpTo {
@@ -16,15 +19,31 @@ pub enum JumpTo {
     End,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct HookConfig {
+    can_jump_to: Vec<JumpTo>,
+}
+
+impl HookConfig {
+    pub fn new(can_jump_to: Vec<JumpTo>) -> Self {
+        Self { can_jump_to }
+    }
+
+    pub fn can_jump_to(&self) -> &[JumpTo] {
+        &self.can_jump_to
+    }
+}
+
 #[derive(Clone)]
 pub struct ModelRequest {
     model: Arc<dyn BaseChatModel>,
     messages: Vec<BaseMessage>,
     system_message: Option<SystemMessage>,
-    tool_choice: Option<ToolChoice>,
+    tool_binding_options: ToolBindingOptions,
     tools: Vec<ToolDefinition>,
     response_format: Option<ResponseFormat>,
     state: AgentState,
+    model_settings: BTreeMap<String, Value>,
     jump_to: Option<JumpTo>,
 }
 
@@ -34,10 +53,11 @@ impl ModelRequest {
             model,
             messages,
             system_message: None,
-            tool_choice: None,
+            tool_binding_options: ToolBindingOptions::default(),
             tools: Vec::new(),
             response_format: None,
             state: AgentState::new(Vec::new()),
+            model_settings: BTreeMap::new(),
             jump_to: None,
         }
     }
@@ -47,8 +67,11 @@ impl ModelRequest {
         self
     }
 
-    pub fn with_tool_choice(mut self, tool_choice: ToolChoice) -> Self {
-        self.tool_choice = Some(tool_choice);
+    pub fn with_tool_choice(
+        mut self,
+        tool_choice: langchain_core::language_models::ToolChoice,
+    ) -> Self {
+        self.tool_binding_options.tool_choice = Some(tool_choice);
         self
     }
 
@@ -67,6 +90,11 @@ impl ModelRequest {
         self
     }
 
+    pub fn with_tool_binding_options(mut self, options: ToolBindingOptions) -> Self {
+        self.tool_binding_options = options;
+        self
+    }
+
     pub fn with_jump_to(mut self, jump_to: JumpTo) -> Self {
         self.jump_to = Some(jump_to);
         self
@@ -74,10 +102,6 @@ impl ModelRequest {
 
     pub fn override_with(&self) -> Self {
         self.clone()
-    }
-
-    pub fn model(&self) -> &Arc<dyn BaseChatModel> {
-        &self.model
     }
 
     pub fn messages(&self) -> &[BaseMessage] {
@@ -88,8 +112,8 @@ impl ModelRequest {
         self.system_message.as_ref()
     }
 
-    pub fn tool_choice(&self) -> Option<&ToolChoice> {
-        self.tool_choice.as_ref()
+    pub fn tool_choice(&self) -> Option<&langchain_core::language_models::ToolChoice> {
+        self.tool_binding_options.tool_choice.as_ref()
     }
 
     pub fn tools(&self) -> &[ToolDefinition] {
@@ -100,8 +124,56 @@ impl ModelRequest {
         self.response_format.as_ref()
     }
 
+    pub fn messages_mut(&mut self) -> &mut Vec<BaseMessage> {
+        &mut self.messages
+    }
+
+    pub fn tools_mut(&mut self) -> &mut Vec<ToolDefinition> {
+        &mut self.tools
+    }
+
+    pub fn state_mut(&mut self) -> &mut AgentState {
+        &mut self.state
+    }
+
     pub fn state(&self) -> &AgentState {
         &self.state
+    }
+
+    pub fn tool_binding_options(&self) -> &ToolBindingOptions {
+        &self.tool_binding_options
+    }
+
+    pub fn model(&self) -> &Arc<dyn BaseChatModel> {
+        &self.model
+    }
+
+    pub fn with_model(mut self, model: Arc<dyn BaseChatModel>) -> Self {
+        self.model = model;
+        self
+    }
+
+    pub fn composed_messages(&self) -> Vec<BaseMessage> {
+        match &self.system_message {
+            Some(message) => {
+                let mut messages = vec![BaseMessage::from(message.clone())];
+                messages.extend(self.messages.clone());
+                messages
+            }
+            None => self.messages.clone(),
+        }
+    }
+
+    pub fn sync_state_messages(&mut self) {
+        self.state = self.state.clone().with_messages(self.composed_messages());
+    }
+
+    pub fn model_settings(&self) -> &BTreeMap<String, Value> {
+        &self.model_settings
+    }
+
+    pub fn model_settings_mut(&mut self) -> &mut BTreeMap<String, Value> {
+        &mut self.model_settings
     }
 
     pub fn jump_to(&self) -> Option<JumpTo> {
@@ -135,6 +207,10 @@ impl ModelResponse {
     pub fn structured_response(&self) -> Option<&Value> {
         self.structured_response.as_ref()
     }
+
+    pub fn result_mut(&mut self) -> &mut Vec<BaseMessage> {
+        &mut self.result
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -165,12 +241,87 @@ impl ExtendedModelResponse {
     }
 }
 
-pub trait AgentMiddleware {
-    fn before_agent(&self, _state: &AgentState) -> Option<JumpTo> {
-        None
+pub type ModelCallResult = ModelResponse;
+pub type ModelCallHandler = Arc<
+    dyn Fn(ModelRequest) -> BoxFuture<'static, Result<ModelResponse, LangChainError>> + Send + Sync,
+>;
+
+pub trait AgentMiddleware: Send + Sync {
+    fn name(&self) -> &'static str {
+        std::any::type_name::<Self>()
     }
 
-    fn after_model(&self, _response: &ModelResponse) -> Option<JumpTo> {
-        None
+    fn before_agent(&self, _state: &mut AgentState) -> Result<Option<JumpTo>, LangChainError> {
+        Ok(None)
     }
+
+    fn before_model(&self, _request: &mut ModelRequest) -> Result<Option<JumpTo>, LangChainError> {
+        Ok(None)
+    }
+
+    fn after_model(
+        &self,
+        _state: &mut AgentState,
+        _response: &mut ModelResponse,
+    ) -> Result<Option<JumpTo>, LangChainError> {
+        Ok(None)
+    }
+
+    fn after_agent(&self, _state: &mut AgentState) -> Result<Option<JumpTo>, LangChainError> {
+        Ok(None)
+    }
+
+    fn wrap_model_call(
+        &self,
+        request: ModelRequest,
+        handler: ModelCallHandler,
+    ) -> BoxFuture<'static, Result<ModelResponse, LangChainError>> {
+        handler(request)
+    }
+
+    fn wrap_tool_call(
+        &self,
+        request: ToolCallRequest,
+        handler: ToolCallHandler,
+    ) -> BoxFuture<'static, Result<langchain_core::messages::ToolMessage, LangChainError>> {
+        handler(request)
+    }
+}
+
+pub fn hook_config(can_jump_to: impl IntoIterator<Item = JumpTo>) -> HookConfig {
+    HookConfig::new(can_jump_to.into_iter().collect())
+}
+
+pub fn before_agent<T>(middleware: T) -> T {
+    middleware
+}
+
+pub fn before_model<T>(middleware: T) -> T {
+    middleware
+}
+
+pub fn after_model<T>(middleware: T) -> T {
+    middleware
+}
+
+pub fn after_agent<T>(middleware: T) -> T {
+    middleware
+}
+
+pub fn dynamic_prompt(prompt: impl Into<String>) -> SystemMessage {
+    SystemMessage::new(prompt)
+}
+
+pub fn wrap_model_call(
+    request: ModelRequest,
+    handler: ModelCallHandler,
+) -> BoxFuture<'static, Result<ModelResponse, LangChainError>> {
+    handler(request)
+}
+
+pub fn wrap_tool_call(
+    request: ToolCallRequest,
+    handler: ToolCallHandler,
+) -> BoxFuture<'static, Result<langchain_core::messages::ToolMessage, LangChainError>> {
+    handler(request)
 }

@@ -113,7 +113,7 @@ impl<State, Runtime> ToolCallRequest<State, Runtime> {
     }
 }
 
-type ToolCallHandler<State = Value, Runtime = ToolRuntime<Value, Value>> = Arc<
+pub type ToolCallHandler<State = Value, Runtime = ToolRuntime<Value, Value>> = Arc<
     dyn Fn(
             ToolCallRequest<State, Runtime>,
         ) -> BoxFuture<'static, Result<ToolMessage, LangChainError>>
