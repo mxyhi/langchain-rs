@@ -92,3 +92,7 @@ impl BaseChatModel for ChatXAI {
         BaseChatModel::with_structured_output(&self.inner, schema, options)
     }
 }
+
+pub mod chat_models {
+    pub use crate::ChatXAI;
+}

@@ -18,9 +18,12 @@ pub fn init_embeddings(
                 api_key,
             ),
         )),
-        "huggingface" => Ok(Box::new(langchain_huggingface::HuggingFaceEmbeddings::new(
-            model,
-        ))),
+        "huggingface" => Ok(Box::new(match resolved_base_url.as_deref() {
+            Some(base_url) => langchain_huggingface::HuggingFaceEmbeddings::new_with_base_url(
+                model, base_url, api_key,
+            ),
+            None => langchain_huggingface::HuggingFaceEmbeddings::new(model),
+        })),
         "mistralai" => Ok(Box::new(
             langchain_mistralai::MistralAIEmbeddings::new_with_base_url(
                 model,
@@ -28,7 +31,13 @@ pub fn init_embeddings(
                 api_key,
             ),
         )),
-        "nomic" => Ok(Box::new(langchain_nomic::NomicEmbeddings::new(model))),
+        "nomic" => Ok(Box::new(
+            langchain_nomic::NomicEmbeddings::new_with_base_url(
+                model,
+                require_base_url(&provider_key, resolved_base_url.as_deref())?,
+                api_key,
+            ),
+        )),
         "ollama" => Ok(Box::new(
             langchain_ollama::OllamaEmbeddings::new_with_base_url(
                 model,

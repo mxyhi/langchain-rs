@@ -43,6 +43,7 @@ pub mod text_splitters {
 
 pub mod tools {
     pub use langchain_core::tools::*;
+    pub mod tool_node;
 }
 
 pub mod vectorstores {

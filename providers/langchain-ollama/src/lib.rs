@@ -177,3 +177,15 @@ impl Embeddings for OllamaEmbeddings {
         self.inner.embed_documents(texts)
     }
 }
+
+pub mod chat_models {
+    pub use crate::ChatOllama;
+}
+
+pub mod embeddings {
+    pub use crate::OllamaEmbeddings;
+}
+
+pub mod llms {
+    pub use crate::OllamaLLM;
+}

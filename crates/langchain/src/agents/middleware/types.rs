@@ -7,6 +7,7 @@ use serde_json::Value;
 
 pub use crate::agents::AgentState;
 use crate::agents::structured_output::ResponseFormat;
+pub use crate::tools::tool_node::{ToolCallRequest, ToolCallWrapper};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JumpTo {

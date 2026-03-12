@@ -1,27 +1,83 @@
 use langchain_core::embeddings::Embeddings;
 use langchain_core::language_models::{BaseChatModel, BaseLLM};
-use langchain_core::messages::BaseMessage;
+use langchain_core::messages::{BaseMessage, HumanMessage};
 use langchain_openai::{AzureChatOpenAI, AzureOpenAI, AzureOpenAIEmbeddings, custom_tool};
 use serde_json::json;
+use wiremock::matchers::{header, method, path, query_param};
+use wiremock::{Mock, MockServer, ResponseTemplate};
 
 #[tokio::test]
-async fn azure_boundaries_exist_and_fail_honestly() {
+async fn azure_boundaries_route_requests_to_deployment_scoped_openai_endpoints() {
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/openai/deployments/test-deployment/chat/completions"))
+        .and(query_param("api-version", "2024-02-01"))
+        .and(header("api-key", "test-key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id": "azure-chat-1",
+            "model": "gpt-4o-mini",
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": "azure chat ok"
+                    }
+                }
+            ],
+            "usage": {
+                "prompt_tokens": 2,
+                "completion_tokens": 3,
+                "total_tokens": 5
+            }
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/openai/deployments/test-deployment/completions"))
+        .and(query_param("api-version", "2024-02-01"))
+        .and(header("api-key", "test-key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "choices": [
+                { "text": "azure llm ok", "finish_reason": "stop" }
+            ],
+            "usage": {
+                "prompt_tokens": 2,
+                "completion_tokens": 3,
+                "total_tokens": 5
+            },
+            "model": "gpt-35-turbo-instruct"
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/openai/deployments/test-deployment/embeddings"))
+        .and(query_param("api-version", "2024-02-01"))
+        .and(header("api-key", "test-key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": [
+                { "embedding": [0.1, 0.2, 0.3] }
+            ]
+        })))
+        .mount(&server)
+        .await;
+
     let chat = AzureChatOpenAI::new(
         "gpt-4o-mini",
         "test-deployment",
-        "https://example-resource.openai.azure.com",
+        server.uri(),
         Some("test-key"),
     );
     let llm = AzureOpenAI::new(
         "gpt-35-turbo-instruct",
         "test-deployment",
-        "https://example-resource.openai.azure.com",
+        server.uri(),
         Some("test-key"),
     );
     let embeddings = AzureOpenAIEmbeddings::new(
         "text-embedding-3-small",
         "test-deployment",
-        "https://example-resource.openai.azure.com",
+        server.uri(),
         Some("test-key"),
     );
 
@@ -33,31 +89,28 @@ async fn azure_boundaries_exist_and_fail_honestly() {
     assert_eq!(embeddings.deployment_name(), "test-deployment");
     assert_eq!(
         chat.base_url(),
-        "https://example-resource.openai.azure.com/openai/deployments/test-deployment"
+        format!("{}/openai/deployments/test-deployment", server.uri())
     );
 
-    assert!(
-        BaseChatModel::generate(&chat, Vec::<BaseMessage>::new(), Default::default())
-            .await
-            .expect_err("azure chat boundary should be explicit unsupported")
-            .to_string()
-            .contains("AzureChatOpenAI transport is not implemented")
-    );
-    assert!(
-        BaseLLM::generate(&llm, vec!["ping".to_owned()], Default::default())
-            .await
-            .expect_err("azure llm boundary should be explicit unsupported")
-            .to_string()
-            .contains("AzureOpenAI transport is not implemented")
-    );
-    assert!(
-        embeddings
-            .embed_query("ping")
-            .await
-            .expect_err("azure embeddings boundary should be explicit unsupported")
-            .to_string()
-            .contains("AzureOpenAIEmbeddings transport is not implemented")
-    );
+    let chat_response = BaseChatModel::generate(
+        &chat,
+        vec![BaseMessage::from(HumanMessage::new("ping"))],
+        Default::default(),
+    )
+    .await
+    .expect("azure chat request should succeed");
+    assert_eq!(chat_response.content(), "azure chat ok");
+
+    let llm_response = BaseLLM::generate(&llm, vec!["ping".to_owned()], Default::default())
+        .await
+        .expect("azure llm request should succeed");
+    assert_eq!(llm_response.generations()[0][0].text(), "azure llm ok");
+
+    let embedding = embeddings
+        .embed_query("ping")
+        .await
+        .expect("azure embeddings request should succeed");
+    assert_eq!(embedding, vec![0.1, 0.2, 0.3]);
 }
 
 #[test]

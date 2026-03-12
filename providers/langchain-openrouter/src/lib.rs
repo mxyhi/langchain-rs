@@ -92,3 +92,7 @@ impl BaseChatModel for ChatOpenRouter {
         BaseChatModel::with_structured_output(&self.inner, schema, options)
     }
 }
+
+pub mod chat_models {
+    pub use crate::ChatOpenRouter;
+}

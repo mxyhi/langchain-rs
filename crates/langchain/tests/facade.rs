@@ -1,12 +1,19 @@
+use std::sync::Arc;
+
 use langchain::chat_models::BaseChatModel;
 use langchain::embeddings::{CharacterEmbeddings, Embeddings};
-use langchain::messages::HumanMessage;
+use langchain::messages::{HumanMessage, ToolCall};
 use langchain::prompt_values::StringPromptValue;
 use langchain::retrievers::VectorStoreRetriever;
 use langchain::runnables::Runnable;
 use langchain::text_splitters::{TextSplitter, TokenTextSplitter, Tokenizer, split_text_on_tokens};
-use langchain::tools::tool;
+use langchain::tools::tool_node::{
+    InjectedState as ToolNodeInjectedState, InjectedStore as ToolNodeInjectedStore,
+    ToolCallRequest, ToolCallWithContext, ToolCallWrapper, ToolRuntime as ToolNodeRuntime,
+};
+use langchain::tools::{BaseTool, Tool, ToolDefinition, tool};
 use langchain::vectorstores::{InMemoryVectorStore, VectorStore};
+use serde_json::{Value, json};
 
 #[test]
 fn facade_reexports_messages() {
@@ -29,6 +36,46 @@ fn facade_reexports_tool_helper() {
 
     assert_eq!(definition.name(), "lookup");
     assert_eq!(definition.description(), "Look up a record");
+}
+
+#[test]
+fn facade_reexports_tool_node_compat_surface() {
+    let _: ToolNodeInjectedState<Value> = Default::default();
+    let _: ToolNodeInjectedStore<Value> = Default::default();
+
+    let runtime = ToolNodeRuntime::new(json!({"messages": []}), json!({"writes": []}))
+        .with_tool_call_id("call_lookup_1");
+    let tool_call = ToolCall::new("lookup", json!({"input": "rust"})).with_id("call_lookup_1");
+    let tool: Arc<dyn BaseTool> = Arc::new(Tool::new(
+        ToolDefinition::new("lookup", "Look up a record"),
+        |_input| Box::pin(async move { Ok("done".to_owned()) }),
+    ));
+
+    let request = ToolCallRequest::new(
+        tool_call.clone(),
+        json!({"messages": ["hello"]}),
+        runtime.clone(),
+    )
+    .with_tool(tool.clone());
+    let updated = request.override_with().with_tool_call(
+        ToolCall::new("lookup", json!({"input": "langchain"})).with_id("call_lookup_1"),
+    );
+
+    assert_eq!(request.tool_call().args()["input"], "rust");
+    assert_eq!(updated.tool_call().args()["input"], "langchain");
+    assert_eq!(request.state()["messages"][0], "hello");
+    assert_eq!(request.runtime().tool_call_id(), Some("call_lookup_1"));
+    assert!(Arc::ptr_eq(
+        request.tool().expect("tool should be attached"),
+        &tool,
+    ));
+
+    let with_context = ToolCallWithContext::new(tool_call, json!({"messages": ["hello"]}));
+    assert_eq!(with_context.tool_call().name(), "lookup");
+    assert_eq!(with_context.state()["messages"][0], "hello");
+
+    let wrapper: ToolCallWrapper = Arc::new(|request, handler| handler(request));
+    let _ = wrapper;
 }
 
 #[tokio::test]

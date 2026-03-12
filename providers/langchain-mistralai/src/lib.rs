@@ -131,3 +131,11 @@ impl Embeddings for MistralAIEmbeddings {
         self.inner.embed_documents(texts)
     }
 }
+
+pub mod chat_models {
+    pub use crate::ChatMistralAI;
+}
+
+pub mod embeddings {
+    pub use crate::MistralAIEmbeddings;
+}

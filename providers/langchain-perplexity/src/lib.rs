@@ -1,8 +1,8 @@
-mod chat_models;
-mod output_parsers;
-mod retrievers;
-mod tools;
-mod types;
+pub mod chat_models;
+pub mod output_parsers;
+pub mod retrievers;
+pub mod tools;
+pub mod types;
 
 pub use chat_models::ChatPerplexity;
 pub use output_parsers::{

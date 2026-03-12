@@ -246,7 +246,13 @@ pub fn init_chat_model(
             api_key,
         ))),
         "huggingface" => Ok(Box::new(
-            langchain_huggingface::ChatHuggingFace::from_model_id(model),
+            langchain_huggingface::ChatHuggingFace::new_with_base_url(
+                model,
+                resolved_base_url
+                    .as_deref()
+                    .unwrap_or("https://router.huggingface.co/v1"),
+                api_key,
+            ),
         )),
         "mistralai" => Ok(Box::new(
             langchain_mistralai::ChatMistralAI::new_with_base_url(
@@ -272,7 +278,13 @@ pub fn init_chat_model(
                 api_key,
             ),
         )),
-        "perplexity" => Ok(Box::new(langchain_perplexity::ChatPerplexity::new(model))),
+        "perplexity" => Ok(Box::new(
+            langchain_perplexity::ChatPerplexity::new_with_base_url(
+                model,
+                require_base_url(&provider_key, resolved_base_url.as_deref())?,
+                api_key,
+            ),
+        )),
         "xai" => Ok(Box::new(langchain_xai::ChatXAI::new_with_base_url(
             model,
             require_base_url(&provider_key, resolved_base_url.as_deref())?,

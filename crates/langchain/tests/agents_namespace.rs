@@ -3,12 +3,15 @@ use std::sync::Arc;
 use langchain::agents::create_agent;
 use langchain::agents::middleware::types::{
     AgentMiddleware, AgentState, ExtendedModelResponse, JumpTo, ModelRequest, ModelResponse,
+    ToolCallRequest, ToolCallWrapper,
 };
 use langchain::agents::structured_output::{
     AutoStrategy, MultipleStructuredOutputsError, ProviderStrategy, ResponseFormat,
     StructuredOutputValidationError, ToolStrategy,
 };
 use langchain::chat_models::ParrotChatModel;
+use langchain::messages::ToolCall;
+use langchain::tools::{BaseTool, Tool, ToolDefinition, ToolRuntime};
 use langchain_core::language_models::StructuredOutputSchema;
 use langchain_core::messages::{AIMessage, HumanMessage, SystemMessage};
 use serde_json::json;
@@ -100,4 +103,33 @@ fn middleware_types_are_constructible_and_overrideable() {
     let middleware = NoopMiddleware;
     let maybe_jump = middleware.before_agent(request.state());
     assert_eq!(maybe_jump, None);
+}
+
+#[test]
+fn middleware_types_reexport_tool_call_request_surface() {
+    let tool: Arc<dyn BaseTool> = Arc::new(Tool::new(
+        ToolDefinition::new("lookup", "Look up a record"),
+        |_input| Box::pin(async move { Ok("done".to_owned()) }),
+    ));
+    let request = ToolCallRequest::new(
+        ToolCall::new("lookup", json!({"input": "rust"})).with_id("call_lookup_1"),
+        json!({"messages": ["hello"]}),
+        ToolRuntime::new(json!({"messages": []}), json!({"writes": []}))
+            .with_tool_call_id("call_lookup_1"),
+    )
+    .with_tool(tool.clone());
+
+    let updated = request
+        .override_with()
+        .with_state(json!({"messages": ["updated"]}));
+
+    assert_eq!(request.tool_call().name(), "lookup");
+    assert_eq!(updated.state()["messages"][0], "updated");
+    assert!(Arc::ptr_eq(
+        request.tool().expect("tool should be attached"),
+        &tool,
+    ));
+
+    let wrapper: ToolCallWrapper = Arc::new(|request, handler| handler(request));
+    let _ = wrapper;
 }

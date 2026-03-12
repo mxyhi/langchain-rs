@@ -177,3 +177,15 @@ impl Embeddings for FireworksEmbeddings {
         self.inner.embed_documents(texts)
     }
 }
+
+pub mod chat_models {
+    pub use crate::ChatFireworks;
+}
+
+pub mod embeddings {
+    pub use crate::FireworksEmbeddings;
+}
+
+pub mod llms {
+    pub use crate::Fireworks;
+}

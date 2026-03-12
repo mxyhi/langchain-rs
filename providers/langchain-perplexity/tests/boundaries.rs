@@ -3,6 +3,9 @@ use langchain_perplexity::{
     ChatPerplexity, PerplexitySearchHit, PerplexitySearchResults, PerplexitySearchRetriever,
     ReasoningJsonOutputParser, ReasoningStructuredOutputParser, WebSearchOptions, strip_think_tags,
 };
+use serde_json::json;
+use wiremock::matchers::{bearer_token, body_partial_json, method, path};
+use wiremock::{Mock, MockServer, ResponseTemplate};
 
 #[test]
 fn think_tags_are_removed_before_json_parsing() {
@@ -60,17 +63,51 @@ async fn reasoning_parsers_and_search_boundaries_work() {
 }
 
 #[tokio::test]
-async fn chat_perplexity_is_explicitly_unsupported_for_now() {
+async fn chat_perplexity_uses_official_sonar_api() {
     use langchain_core::language_models::BaseChatModel;
+    use langchain_core::messages::HumanMessage;
 
-    let error = ChatPerplexity::new("sonar")
-        .generate(Vec::new(), Default::default())
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/sonar"))
+        .and(bearer_token("test-key"))
+        .and(body_partial_json(json!({
+            "model": "sonar",
+            "web_search_options": {
+                "search_context_size": 3
+            }
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id": "pplx-chat-1",
+            "model": "sonar",
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": "perplexity ok"
+                    }
+                }
+            ],
+            "usage": {
+                "prompt_tokens": 5,
+                "completion_tokens": 7,
+                "total_tokens": 12
+            },
+            "citations": ["https://www.rust-lang.org/"]
+        })))
+        .mount(&server)
+        .await;
+
+    let message = ChatPerplexity::new_with_base_url("sonar", server.uri(), Some("test-key"))
+        .with_web_search_options(WebSearchOptions::default().with_search_context_size(3))
+        .generate(vec![HumanMessage::new("ping").into()], Default::default())
         .await
-        .expect_err("chat transport should be explicit unsupported");
+        .expect("chat request should succeed");
 
-    assert!(
-        error
-            .to_string()
-            .contains("ChatPerplexity transport is not implemented")
+    assert_eq!(message.content(), "perplexity ok");
+    assert_eq!(
+        message.response_metadata()["citations"],
+        json!(["https://www.rust-lang.org/"])
     );
 }
