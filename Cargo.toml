@@ -1,0 +1,43 @@
+[workspace]
+members = [
+    "crates/langchain-core",
+    "crates/langchain-classic",
+    "crates/langchain",
+    "crates/langchain-model-profiles",
+    "crates/langchain-tests",
+    "crates/langchain-text-splitters",
+    "providers/langchain-openai",
+    "providers/langchain-anthropic",
+    "providers/langchain-chroma",
+    "providers/langchain-deepseek",
+    "providers/langchain-exa",
+    "providers/langchain-fireworks",
+    "providers/langchain-groq",
+    "providers/langchain-huggingface",
+    "providers/langchain-mistralai",
+    "providers/langchain-nomic",
+    "providers/langchain-ollama",
+    "providers/langchain-openrouter",
+    "providers/langchain-perplexity",
+    "providers/langchain-qdrant",
+    "providers/langchain-xai",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2024"
+license = "MIT"
+version = "0.1.0"
+
+[workspace.dependencies]
+bytes = "1.11.0"
+futures-core = "0.3.31"
+futures-util = "0.3.31"
+reqwest = { version = "0.12.24", default-features = false, features = ["json", "rustls-tls", "stream"] }
+secrecy = "0.10.3"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+thiserror = "2.0.17"
+tokio = { version = "1.48.0", features = ["macros", "rt-multi-thread", "time"] }
+wiremock = "0.6.5"
+

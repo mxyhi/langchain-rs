@@ -1,0 +1,9 @@
+[package]
+name = "langchain"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+langchain-core = { path = "../langchain-core" }
+langchain-text-splitters = { path = "../langchain-text-splitters" }

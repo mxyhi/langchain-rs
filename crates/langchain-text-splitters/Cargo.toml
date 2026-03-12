@@ -1,0 +1,12 @@
+[package]
+name = "langchain-text-splitters"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+langchain-core = { path = "../langchain-core" }
+serde_json.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
