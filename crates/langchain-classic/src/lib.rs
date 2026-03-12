@@ -7,18 +7,28 @@
 
 pub mod chains;
 
+pub mod agents {
+    pub use langchain::agents::*;
+}
+
+pub mod cache {
+    pub use langchain_core::caches::*;
+}
+
 pub mod chat_models {
+    pub use langchain::chat_models::{
+        ChatAnthropic, ChatDeepSeek, ChatFireworks, ChatGroq, ChatHuggingFace, ChatMistralAI,
+        ChatOllama, ChatOpenAI, ChatOpenRouter, ChatPerplexity, ChatXAI, ConfigurableChatModel,
+    };
     pub use langchain_core::language_models::{
         BaseChatModel, ParrotChatModel, StructuredOutput, StructuredOutputMethod,
         StructuredOutputOptions, StructuredOutputSchema, ToolBindingOptions, ToolChoice,
     };
 
     pub fn init_chat_model(
-        _model: &str,
+        model: &str,
     ) -> Result<Box<dyn BaseChatModel>, langchain_core::LangChainError> {
-        Err(langchain_core::LangChainError::unsupported(
-            "classic chat_models::init_chat_model is not implemented in this milestone",
-        ))
+        langchain::chat_models::init_chat_model(model, None, None, None)
     }
 }
 
@@ -28,6 +38,10 @@ pub mod documents {
 
 pub mod embeddings {
     pub use langchain_core::embeddings::*;
+}
+
+pub mod globals {
+    pub use langchain_core::globals::*;
 }
 
 pub mod language_models {
@@ -62,6 +76,13 @@ pub mod runnables {
     pub use langchain_core::runnables::*;
 }
 
+pub mod text_splitter {
+    pub use langchain_text_splitters::{
+        CharacterTextSplitter, Language, RecursiveCharacterTextSplitter, TextSplitter,
+        TokenTextSplitter, Tokenizer, split_text_on_tokens,
+    };
+}
+
 pub mod tools {
     pub use langchain_core::tools::*;
 }
@@ -87,6 +108,9 @@ pub mod vectorstores {
 
 pub use chains::{ConversationChain, LLMChain};
 pub use langchain_core::LangChainError;
+pub use langchain_core::prompts::PromptTemplate;
+pub use langchain_core::prompts::PromptTemplate as Prompt;
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Marker type for the classic/legacy package boundary.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

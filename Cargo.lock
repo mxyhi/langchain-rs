@@ -580,7 +580,9 @@ name = "langchain-classic"
 version = "0.1.0"
 dependencies = [
  "futures-util",
+ "langchain",
  "langchain-core",
+ "langchain-text-splitters",
  "tokio",
 ]
 

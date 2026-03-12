@@ -6,6 +6,7 @@ use langchain_classic::retrievers::VectorStoreRetriever;
 use langchain_classic::runnables::Runnable;
 use langchain_classic::tools::tool;
 use langchain_classic::vectorstores::{InMemoryVectorStore, VectorStore};
+use langchain_core::messages::BaseMessage;
 
 #[test]
 fn classic_reexports_messages_tools_and_prompt_values() {
@@ -26,18 +27,50 @@ fn classic_reexports_chat_models_boundary() {
     assert_chat_model(&model);
     assert_eq!(model.model_name(), "classic-chat-model");
 
-    let error = match langchain_classic::chat_models::init_chat_model("openai:gpt-4o-mini") {
+    let delegated = langchain_classic::chat_models::init_chat_model("openai:gpt-4o-mini")
+        .expect("classic init_chat_model should delegate to the shared factory boundary");
+    assert_eq!(delegated.model_name(), "gpt-4o-mini");
+
+    let error = match langchain_classic::chat_models::init_chat_model("test-model") {
         Ok(_) => {
-            panic!("classic init_chat_model boundary should be explicit about unsupported state")
+            panic!("model without provider should still fail when provider cannot be inferred")
         }
         Err(error) => error,
     };
     assert!(
-        error
-            .to_string()
-            .contains("classic chat_models::init_chat_model is not implemented"),
+        error.to_string().contains("Unable to infer model provider"),
         "unexpected error: {error}"
     );
+
+    fn assert_concrete<T>(_value: &T) {}
+    assert_concrete(&langchain_classic::chat_models::ChatOpenAI::new(
+        "gpt-4o-mini",
+        "https://example.com",
+        Option::<String>::None,
+    ));
+    let configurable = langchain_classic::chat_models::ConfigurableChatModel::new(
+        Some("gpt-4o-mini"),
+        Some("openai"),
+        Some("https://api.openai.com/v1"),
+        Option::<String>::None,
+    );
+    assert_concrete(&configurable);
+}
+
+#[tokio::test]
+async fn classic_reexports_agents_boundary() {
+    let agent = langchain_classic::agents::create_agent(
+        langchain_classic::chat_models::ParrotChatModel::new("classic-agent", 16),
+    )
+    .with_system_prompt("Be concise.");
+
+    let state = agent
+        .invoke("hello".to_owned(), Default::default())
+        .await
+        .expect("classic agent facade should be usable");
+
+    assert!(matches!(state.messages()[0], BaseMessage::System(_)));
+    assert_eq!(state.messages()[2].content(), "hello");
 }
 
 #[tokio::test]

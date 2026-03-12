@@ -8,13 +8,13 @@ use langchain_core::output_parsers::{
     XMLOutputParser,
 };
 use langchain_core::retrievers::BaseRetriever;
-use langchain_core::runnables::{Runnable, RunnableConfig};
+use langchain_core::runnables::{Runnable, RunnableConfig, RunnableLambda};
 use langchain_core::tools::{
-    BaseTool, BaseToolkit, SchemaAnnotationError, Tool, create_retriever_tool,
-    render_text_description, render_text_description_and_args, tool,
+    BaseTool, BaseToolkit, RetrieverInput, SchemaAnnotationError, Tool, convert_runnable_to_tool,
+    create_retriever_tool, render_text_description, render_text_description_and_args, tool,
 };
 use langchain_core::vectorstores::VectorStoreRetriever;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 #[derive(Clone)]
@@ -45,6 +45,12 @@ impl BaseToolkit for ToolkitFixture {
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 struct AnswerPayload {
     answer: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+struct MultiplyInput {
+    a: i32,
+    b: Vec<i32>,
 }
 
 #[tokio::test]
@@ -90,6 +96,96 @@ async fn retriever_tool_serializes_documents_and_vectorstore_reexport_exists() {
     let _ = VectorStoreRetriever::new(langchain_core::vectorstores::InMemoryVectorStore::new(
         langchain_core::embeddings::CharacterEmbeddings::new(),
     ));
+}
+
+#[test]
+fn retriever_input_public_surface_round_trips_and_matches_tool_schema() {
+    let input = RetrieverInput::new("rust");
+
+    assert_eq!(
+        serde_json::to_value(&input).expect("serialize retriever input"),
+        json!({ "query": "rust" })
+    );
+    assert_eq!(
+        serde_json::from_value::<RetrieverInput>(json!({ "query": "langchain" }))
+            .expect("deserialize retriever input"),
+        RetrieverInput::new("langchain")
+    );
+    assert_eq!(
+        RetrieverInput::json_schema(),
+        json!({
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "query to look up in retriever"
+                }
+            },
+            "required": ["query"]
+        })
+    );
+
+    let retriever_tool = create_retriever_tool(StaticRetriever, "lookup", "Look up docs");
+    assert_eq!(
+        retriever_tool.definition().parameters(),
+        &RetrieverInput::json_schema()
+    );
+}
+
+#[tokio::test]
+async fn convert_runnable_to_tool_handles_string_and_structured_inputs() {
+    let string_tool = convert_runnable_to_tool(
+        RunnableLambda::new(|input: String| async move { Ok(format!("{input}z")) }),
+        tool("append_z", "Append a suffix"),
+    );
+
+    assert_eq!(
+        string_tool.definition().parameters(),
+        &json!({
+            "type": "object",
+            "properties": {
+                "input": { "type": "string" }
+            },
+            "required": ["input"]
+        })
+    );
+
+    let string_message = string_tool
+        .invoke(
+            ToolCall::new("append_z", json!({ "input": "ba" })).with_id("call_suffix"),
+            RunnableConfig::default(),
+        )
+        .await
+        .expect("string runnable should convert to a tool");
+    assert_eq!(string_message.content(), "baz");
+    assert_eq!(string_message.artifact(), Some(&json!("baz")));
+
+    let structured_tool = convert_runnable_to_tool(
+        RunnableLambda::new(|input: MultiplyInput| async move {
+            Ok(input.a * input.b.into_iter().max().unwrap_or_default())
+        }),
+        tool("multiply", "Multiply by the largest entry").with_parameters(json!({
+            "type": "object",
+            "properties": {
+                "a": { "type": "integer" },
+                "b": {
+                    "type": "array",
+                    "items": { "type": "integer" }
+                }
+            },
+            "required": ["a", "b"]
+        })),
+    );
+
+    let structured_message = structured_tool
+        .invoke(
+            ToolCall::new("multiply", json!({ "a": 3, "b": [1, 2] })).with_id("call_product"),
+            RunnableConfig::default(),
+        )
+        .await
+        .expect("structured runnable should convert to a tool");
+    assert_eq!(structured_message.content(), "6");
+    assert_eq!(structured_message.artifact(), Some(&json!(6)));
 }
 
 #[test]

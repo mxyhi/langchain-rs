@@ -1,7 +1,9 @@
+use std::any::TypeId;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
 use futures_util::future::BoxFuture;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -9,7 +11,7 @@ use crate::LangChainError;
 use crate::documents::Document;
 use crate::messages::{ToolCall, ToolMessage, ToolMessageStatus};
 use crate::retrievers::BaseRetriever;
-use crate::runnables::RunnableConfig;
+use crate::runnables::{Runnable, RunnableConfig};
 
 pub trait BaseTool: Send + Sync {
     fn definition(&self) -> &ToolDefinition;
@@ -173,6 +175,32 @@ pub fn tool(name: impl Into<String>, description: impl Into<String>) -> ToolDefi
     ToolDefinition::new(name, description)
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RetrieverInput {
+    pub query: String,
+}
+
+impl RetrieverInput {
+    pub fn new(query: impl Into<String>) -> Self {
+        Self {
+            query: query.into(),
+        }
+    }
+
+    pub fn json_schema() -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "query to look up in retriever"
+                }
+            },
+            "required": ["query"]
+        })
+    }
+}
+
 type ToolHandler =
     dyn Fn(String) -> BoxFuture<'static, Result<String, LangChainError>> + Send + Sync;
 type StructuredToolHandler =
@@ -301,6 +329,27 @@ pub fn render_text_description_and_args(tools: &[&dyn BaseTool]) -> String {
         .join("\n")
 }
 
+pub fn convert_runnable_to_tool<R, I, O>(runnable: R, definition: ToolDefinition) -> StructuredTool
+where
+    R: Runnable<I, O> + Send + Sync + 'static,
+    I: DeserializeOwned + Send + Sync + 'static,
+    O: Serialize + Send + 'static,
+{
+    let runnable = Arc::new(runnable);
+    let definition = normalize_runnable_tool_definition::<I>(definition);
+
+    StructuredTool::new(definition, move |input| {
+        let runnable = Arc::clone(&runnable);
+        Box::pin(async move {
+            let parsed_input = deserialize_runnable_input::<I>(&input)?;
+            let output = runnable
+                .invoke(parsed_input, RunnableConfig::default())
+                .await?;
+            serde_json::to_value(output).map_err(LangChainError::from)
+        })
+    })
+}
+
 pub fn create_retriever_tool<R>(
     retriever: R,
     name: impl Into<String>,
@@ -310,18 +359,13 @@ where
     R: BaseRetriever + Send + Sync + 'static,
 {
     let retriever = Arc::new(retriever);
-    let definition = ToolDefinition::new(name, description).with_parameters(json!({
-        "type": "object",
-        "properties": {
-            "query": { "type": "string" }
-        },
-        "required": ["query"]
-    }));
+    let definition =
+        ToolDefinition::new(name, description).with_parameters(RetrieverInput::json_schema());
 
     StructuredTool::new(definition, move |input| {
         let retriever = Arc::clone(&retriever);
         Box::pin(async move {
-            let query = extract_named_string_argument(&input, "query")?;
+            let RetrieverInput { query } = deserialize_runnable_input::<RetrieverInput>(&input)?;
             let documents = retriever
                 .get_relevant_documents(&query, RunnableConfig::default())
                 .await?;
@@ -332,6 +376,36 @@ where
                 documents.into_iter().map(document_to_value).collect(),
             ))
         })
+    })
+}
+
+fn normalize_runnable_tool_definition<I>(definition: ToolDefinition) -> ToolDefinition
+where
+    I: 'static,
+{
+    // String-input runnables still travel through ToolCall JSON, so normalize them
+    // to the existing {"input": "..."} contract unless the caller supplied a schema.
+    if TypeId::of::<I>() == TypeId::of::<String>()
+        && definition.parameters() == &empty_object_schema()
+    {
+        return definition.with_parameters(single_string_input_schema());
+    }
+
+    definition
+}
+
+fn deserialize_runnable_input<I>(input: &Value) -> Result<I, LangChainError>
+where
+    I: DeserializeOwned + 'static,
+{
+    let normalized_input = if TypeId::of::<I>() == TypeId::of::<String>() {
+        Value::String(extract_named_string_argument(input, "input")?)
+    } else {
+        input.clone()
+    };
+
+    serde_json::from_value(normalized_input).map_err(|error| {
+        LangChainError::request(format!("tool input could not be deserialized: {error}"))
     })
 }
 
@@ -347,6 +421,23 @@ fn extract_named_string_argument(input: &Value, key: &str) -> Result<String, Lan
             "tool input must be a string or object containing `{key}`"
         ))),
     }
+}
+
+fn empty_object_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {}
+    })
+}
+
+fn single_string_input_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "input": { "type": "string" }
+        },
+        "required": ["input"]
+    })
 }
 
 fn document_to_value(document: Document) -> Value {

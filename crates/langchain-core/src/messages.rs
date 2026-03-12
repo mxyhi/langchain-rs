@@ -135,6 +135,163 @@ impl TextContentBlock {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReasoningContentBlock {
+    reasoning: String,
+}
+
+impl ReasoningContentBlock {
+    pub fn new(reasoning: impl Into<String>) -> Self {
+        Self {
+            reasoning: reasoning.into(),
+        }
+    }
+
+    pub fn reasoning(&self) -> &str {
+        &self.reasoning
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlainTextContentBlock {
+    text: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mime_type: Option<String>,
+}
+
+impl PlainTextContentBlock {
+    pub fn new(text: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            mime_type: Some("text/plain".to_owned()),
+        }
+    }
+
+    pub fn with_mime_type(mut self, mime_type: impl Into<String>) -> Self {
+        self.mime_type = Some(mime_type.into());
+        self
+    }
+
+    pub fn text(&self) -> &str {
+        &self.text
+    }
+
+    pub fn mime_type(&self) -> Option<&str> {
+        self.mime_type.as_deref()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DataContentBlock {
+    data: Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mime_type: Option<String>,
+}
+
+impl DataContentBlock {
+    pub fn new(data: Value) -> Self {
+        Self {
+            data,
+            mime_type: None,
+        }
+    }
+
+    pub fn with_mime_type(mut self, mime_type: impl Into<String>) -> Self {
+        self.mime_type = Some(mime_type.into());
+        self
+    }
+
+    pub fn data(&self) -> &Value {
+        &self.data
+    }
+
+    pub fn mime_type(&self) -> Option<&str> {
+        self.mime_type.as_deref()
+    }
+}
+
+macro_rules! data_content_block {
+    ($name:ident) => {
+        #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+        pub struct $name {
+            #[serde(skip_serializing_if = "Option::is_none")]
+            url: Option<String>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            base64: Option<String>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            file_id: Option<String>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            mime_type: Option<String>,
+        }
+
+        impl $name {
+            pub fn new() -> Self {
+                Self::default()
+            }
+
+            pub fn with_url(mut self, url: impl Into<String>) -> Self {
+                self.url = Some(url.into());
+                self
+            }
+
+            pub fn with_base64(mut self, base64: impl Into<String>) -> Self {
+                self.base64 = Some(base64.into());
+                self
+            }
+
+            pub fn with_file_id(mut self, file_id: impl Into<String>) -> Self {
+                self.file_id = Some(file_id.into());
+                self
+            }
+
+            pub fn with_mime_type(mut self, mime_type: impl Into<String>) -> Self {
+                self.mime_type = Some(mime_type.into());
+                self
+            }
+
+            pub fn url(&self) -> Option<&str> {
+                self.url.as_deref()
+            }
+
+            pub fn base64(&self) -> Option<&str> {
+                self.base64.as_deref()
+            }
+
+            pub fn file_id(&self) -> Option<&str> {
+                self.file_id.as_deref()
+            }
+
+            pub fn mime_type(&self) -> Option<&str> {
+                self.mime_type.as_deref()
+            }
+
+            fn has_payload(&self) -> bool {
+                self.url.is_some() || self.base64.is_some() || self.file_id.is_some()
+            }
+        }
+    };
+}
+
+data_content_block!(ImageContentBlock);
+data_content_block!(AudioContentBlock);
+data_content_block!(FileContentBlock);
+data_content_block!(VideoContentBlock);
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct NonStandardContentBlock {
+    value: Value,
+}
+
+impl NonStandardContentBlock {
+    pub fn new(value: Value) -> Self {
+        Self { value }
+    }
+
+    pub fn value(&self) -> &Value {
+        &self.value
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ServerToolCall {
     id: String,
@@ -253,9 +410,16 @@ impl ServerToolResult {
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum ContentBlock {
     Text(TextContentBlock),
+    Reasoning(ReasoningContentBlock),
+    PlainText(PlainTextContentBlock),
+    Data(DataContentBlock),
+    Image(ImageContentBlock),
+    Audio(AudioContentBlock),
+    File(FileContentBlock),
+    Video(VideoContentBlock),
     ServerToolCall(ServerToolCall),
     ServerToolResult(ServerToolResult),
-    NonStandard(Value),
+    NonStandard(NonStandardContentBlock),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -453,6 +617,128 @@ impl FunctionMessage {
 
     pub fn content(&self) -> &str {
         &self.content
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChatMessageChunk {
+    role: String,
+    content: String,
+    id: Option<String>,
+}
+
+impl ChatMessageChunk {
+    pub fn new(role: impl Into<String>, content: impl Into<String>) -> Self {
+        Self {
+            role: role.into(),
+            content: content.into(),
+            id: None,
+        }
+    }
+
+    pub fn with_id(mut self, id: impl Into<String>) -> Self {
+        self.id = Some(id.into());
+        self
+    }
+
+    pub fn role(&self) -> &str {
+        &self.role
+    }
+
+    pub fn content(&self) -> &str {
+        &self.content
+    }
+
+    pub fn id(&self) -> Option<&str> {
+        self.id.as_deref()
+    }
+
+    pub fn to_message(&self) -> ChatMessage {
+        ChatMessage::new(self.role.clone(), self.content.clone())
+    }
+
+    pub fn try_merge(&self, other: &Self) -> Result<Self, LangChainError> {
+        if self.role != other.role {
+            return Err(LangChainError::request(
+                "cannot concatenate chat message chunks with different roles",
+            ));
+        }
+
+        Ok(Self {
+            role: self.role.clone(),
+            content: merge_content(self.content.clone(), other.content.clone()),
+            id: self.id.clone().or_else(|| other.id.clone()),
+        })
+    }
+}
+
+impl std::ops::Add for ChatMessageChunk {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        self.try_merge(&rhs)
+            .expect("chat message chunks must share the same role")
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FunctionMessageChunk {
+    name: String,
+    content: String,
+    id: Option<String>,
+}
+
+impl FunctionMessageChunk {
+    pub fn new(name: impl Into<String>, content: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            content: content.into(),
+            id: None,
+        }
+    }
+
+    pub fn with_id(mut self, id: impl Into<String>) -> Self {
+        self.id = Some(id.into());
+        self
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn content(&self) -> &str {
+        &self.content
+    }
+
+    pub fn id(&self) -> Option<&str> {
+        self.id.as_deref()
+    }
+
+    pub fn to_message(&self) -> FunctionMessage {
+        FunctionMessage::new(self.name.clone(), self.content.clone())
+    }
+
+    pub fn try_merge(&self, other: &Self) -> Result<Self, LangChainError> {
+        if self.name != other.name {
+            return Err(LangChainError::request(
+                "cannot concatenate function message chunks with different names",
+            ));
+        }
+
+        Ok(Self {
+            name: self.name.clone(),
+            content: merge_content(self.content.clone(), other.content.clone()),
+            id: self.id.clone().or_else(|| other.id.clone()),
+        })
+    }
+}
+
+impl std::ops::Add for FunctionMessageChunk {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        self.try_merge(&rhs)
+            .expect("function message chunks must share the same name")
     }
 }
 
@@ -818,7 +1104,9 @@ pub type AnyMessage = BaseMessage;
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum BaseMessageChunk {
     Human(HumanMessageChunk),
+    Chat(ChatMessageChunk),
     Ai(AIMessageChunk),
+    Function(FunctionMessageChunk),
     System(SystemMessageChunk),
     Tool(ToolMessageChunk),
 }
@@ -887,6 +1175,54 @@ impl From<&str> for MessageLikeRepresentation {
     }
 }
 
+pub trait MergeableMessageContent: Sized {
+    fn merge_with(self, other: Self) -> Self;
+}
+
+impl MergeableMessageContent for String {
+    fn merge_with(mut self, other: Self) -> Self {
+        self.push_str(&other);
+        self
+    }
+}
+
+impl MergeableMessageContent for Vec<ContentBlock> {
+    fn merge_with(mut self, other: Self) -> Self {
+        self.extend(other);
+        self
+    }
+}
+
+pub fn merge_content<T>(first: T, second: T) -> T
+where
+    T: MergeableMessageContent,
+{
+    first.merge_with(second)
+}
+
+pub fn is_data_content_block(block: &ContentBlock) -> bool {
+    match block {
+        ContentBlock::PlainText(block) => !block.text().is_empty(),
+        ContentBlock::Data(_) => true,
+        ContentBlock::Image(block) => block.has_payload(),
+        ContentBlock::Audio(block) => block.has_payload(),
+        ContentBlock::File(block) => block.has_payload(),
+        ContentBlock::Video(block) => block.has_payload(),
+        _ => false,
+    }
+}
+
+pub fn get_buffer_string<I>(messages: I) -> Result<String, LangChainError>
+where
+    I: IntoIterator<Item = MessageLikeRepresentation>,
+{
+    messages
+        .into_iter()
+        .map(buffer_string_for_message_like)
+        .collect::<Result<Vec<_>, _>>()
+        .map(|lines| lines.join("\n"))
+}
+
 pub fn trim_messages(messages: &[BaseMessage], max_messages: usize) -> Vec<BaseMessage> {
     let start = messages.len().saturating_sub(max_messages);
     messages[start..].to_vec()
@@ -923,6 +1259,10 @@ pub fn merge_message_runs(messages: &[BaseMessage]) -> Vec<BaseMessage> {
 pub fn message_chunk_to_message(chunk: &BaseMessageChunk) -> BaseMessage {
     match chunk {
         BaseMessageChunk::Human(chunk) => BaseMessage::from(HumanMessage::new(chunk.content())),
+        BaseMessageChunk::Chat(chunk) => {
+            message_from_role_and_content(chunk.role(), chunk.content().to_owned())
+                .unwrap_or_else(|_| BaseMessage::from(SystemMessage::new(chunk.content())))
+        }
         BaseMessageChunk::System(chunk) => BaseMessage::from(SystemMessage::new(chunk.content())),
         BaseMessageChunk::Tool(chunk) => BaseMessage::from(ToolMessage::with_parts(
             chunk.content(),
@@ -930,6 +1270,13 @@ pub fn message_chunk_to_message(chunk: &BaseMessageChunk) -> BaseMessage {
             chunk.name(),
             chunk.artifact().cloned(),
             chunk.status(),
+        )),
+        BaseMessageChunk::Function(chunk) => BaseMessage::from(ToolMessage::with_parts(
+            chunk.content(),
+            chunk.name(),
+            Some(chunk.name()),
+            None,
+            ToolMessageStatus::Success,
         )),
         BaseMessageChunk::Ai(chunk) => {
             let (tool_calls, invalid_tool_calls) = chunk
@@ -1175,6 +1522,51 @@ fn tool_call_from_chunk(chunk: &ToolCallChunk) -> Result<ToolCall, InvalidToolCa
             }
             Err(invalid)
         }
+    }
+}
+
+fn buffer_string_for_message_like(
+    message: MessageLikeRepresentation,
+) -> Result<String, LangChainError> {
+    match message {
+        MessageLikeRepresentation::BaseMessage(message) => {
+            Ok(buffer_string_for_base_message(&message))
+        }
+        MessageLikeRepresentation::Text(content) => Ok(format!("Human: {content}")),
+        MessageLikeRepresentation::RoleAndContent { role, content } => {
+            Ok(buffer_string_for_role(&role, &content))
+        }
+        MessageLikeRepresentation::Chat(message) => {
+            Ok(format!("{}: {}", message.role(), message.content()))
+        }
+        MessageLikeRepresentation::Function(message) => Ok(format!(
+            "Function[{}]: {}",
+            message.name(),
+            message.content()
+        )),
+        MessageLikeRepresentation::Dict(raw) => {
+            let message = message_from_dict(&raw)?;
+            Ok(buffer_string_for_base_message(&message))
+        }
+    }
+}
+
+fn buffer_string_for_base_message(message: &BaseMessage) -> String {
+    match message {
+        BaseMessage::Human(message) => format!("Human: {}", message.content()),
+        BaseMessage::Ai(message) => format!("AI: {}", message.content()),
+        BaseMessage::System(message) => format!("System: {}", message.content()),
+        BaseMessage::Tool(message) => format!("Tool: {}", message.content()),
+    }
+}
+
+fn buffer_string_for_role(role: &str, content: &str) -> String {
+    match normalize_role(role) {
+        Some(MessageRole::Human) => format!("Human: {content}"),
+        Some(MessageRole::Ai) => format!("AI: {content}"),
+        Some(MessageRole::System) => format!("System: {content}"),
+        Some(MessageRole::Tool) => format!("Tool: {content}"),
+        None => format!("{role}: {content}"),
     }
 }
 

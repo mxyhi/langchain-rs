@@ -1,6 +1,11 @@
+pub mod caches;
+pub mod chat_history;
+pub mod chat_sessions;
 pub mod documents;
 pub mod embeddings;
 mod error;
+pub mod exceptions;
+pub mod globals;
 pub mod language_models;
 pub mod messages;
 pub mod output_parsers;
@@ -12,5 +17,7 @@ pub mod retrievers;
 pub mod runnables;
 pub mod tools;
 pub mod vectorstores;
+pub mod version;
 
 pub use error::LangChainError;
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
