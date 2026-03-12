@@ -1,14 +1,10 @@
-pub mod chat_models {
-    pub use langchain_core::language_models::{BaseChatModel, ParrotChatModel};
-}
+pub mod chat_models;
 
 pub mod documents {
     pub use langchain_core::documents::*;
 }
 
-pub mod embeddings {
-    pub use langchain_core::embeddings::*;
-}
+pub mod embeddings;
 
 pub mod messages {
     pub use langchain_core::messages::*;
@@ -39,3 +35,63 @@ pub mod vectorstores {
 }
 
 pub use langchain_core::LangChainError;
+
+const DEFAULT_OPENAI_BASE_URL: &str = "https://api.openai.com/v1";
+
+#[derive(Debug, Clone, Default)]
+pub struct ModelInitOptions {
+    provider: Option<String>,
+    base_url: Option<String>,
+    api_key: Option<String>,
+}
+
+impl ModelInitOptions {
+    pub fn with_provider(mut self, provider: impl Into<String>) -> Self {
+        self.provider = Some(provider.into());
+        self
+    }
+
+    pub fn with_base_url(mut self, base_url: impl Into<String>) -> Self {
+        self.base_url = Some(base_url.into());
+        self
+    }
+
+    pub fn with_api_key(mut self, api_key: impl Into<String>) -> Self {
+        self.api_key = Some(api_key.into());
+        self
+    }
+}
+
+pub fn init_chat_model(
+    model: &str,
+    options: ModelInitOptions,
+) -> Result<Box<dyn chat_models::BaseChatModel>, LangChainError> {
+    chat_models::init_chat_model(
+        model,
+        options.provider.as_deref(),
+        options
+            .base_url
+            .unwrap_or_else(|| DEFAULT_OPENAI_BASE_URL.to_owned()),
+        options.api_key.as_deref(),
+    )
+}
+
+pub fn init_embeddings(
+    model: &str,
+    options: ModelInitOptions,
+) -> Result<Box<dyn embeddings::Embeddings>, LangChainError> {
+    if options.provider.is_none() && !model.contains(':') {
+        return Err(LangChainError::unsupported(
+            "must specify provider or use `provider:model` format for embeddings",
+        ));
+    }
+
+    embeddings::init_embeddings(
+        model,
+        options.provider.as_deref(),
+        options
+            .base_url
+            .unwrap_or_else(|| DEFAULT_OPENAI_BASE_URL.to_owned()),
+        options.api_key.as_deref(),
+    )
+}

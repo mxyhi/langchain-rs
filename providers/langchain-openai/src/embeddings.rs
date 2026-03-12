@@ -1,7 +1,7 @@
+use langchain_core::LangChainError;
+use langchain_core::embeddings::Embeddings;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-
-use langchain_core::LangChainError;
 
 use crate::client::OpenAIClientConfig;
 
@@ -100,6 +100,22 @@ impl OpenAIEmbeddings {
         }
 
         Ok(all_embeddings)
+    }
+}
+
+impl Embeddings for OpenAIEmbeddings {
+    fn embed_query<'a>(
+        &'a self,
+        text: &'a str,
+    ) -> futures_util::future::BoxFuture<'a, Result<Vec<f32>, LangChainError>> {
+        Box::pin(async move { self.embed_query(text).await })
+    }
+
+    fn embed_documents<'a>(
+        &'a self,
+        texts: Vec<String>,
+    ) -> futures_util::future::BoxFuture<'a, Result<Vec<Vec<f32>>, LangChainError>> {
+        Box::pin(async move { self.embed_documents(texts).await })
     }
 }
 

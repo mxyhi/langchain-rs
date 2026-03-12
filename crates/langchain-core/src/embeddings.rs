@@ -11,6 +11,22 @@ pub trait Embeddings: Send + Sync {
     ) -> BoxFuture<'a, Result<Vec<Vec<f32>>, LangChainError>>;
 }
 
+impl<T> Embeddings for Box<T>
+where
+    T: Embeddings + ?Sized,
+{
+    fn embed_query<'a>(&'a self, text: &'a str) -> BoxFuture<'a, Result<Vec<f32>, LangChainError>> {
+        (**self).embed_query(text)
+    }
+
+    fn embed_documents<'a>(
+        &'a self,
+        texts: Vec<String>,
+    ) -> BoxFuture<'a, Result<Vec<Vec<f32>>, LangChainError>> {
+        (**self).embed_documents(texts)
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct CharacterEmbeddings;
 

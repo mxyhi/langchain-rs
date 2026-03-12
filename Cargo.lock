@@ -532,8 +532,11 @@ name = "langchain"
 version = "0.1.0"
 dependencies = [
  "langchain-core",
+ "langchain-openai",
  "langchain-text-splitters",
+ "serde_json",
  "tokio",
+ "wiremock",
 ]
 
 [[package]]
