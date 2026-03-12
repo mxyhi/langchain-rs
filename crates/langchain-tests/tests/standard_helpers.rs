@@ -3,13 +3,14 @@ use std::collections::BTreeMap;
 use futures_util::future::BoxFuture;
 use langchain_core::LangChainError;
 use langchain_core::documents::Document;
-use langchain_core::language_models::{BaseChatModel, ParrotChatModel};
+use langchain_core::language_models::{BaseChatModel, ParrotChatModel, ParrotLLM};
 use langchain_core::messages::{BaseMessage, HumanMessage};
 use langchain_core::runnables::RunnableConfig;
 use langchain_tests::{
     EmbeddingsUnderTest, SimilaritySearchResult, VectorStoreUnderTest, assert_chat_model_batch,
     assert_chat_model_response, assert_document_embeddings_count, assert_embedding_dimension,
-    assert_get_by_ids_behavior, assert_query_and_documents_share_dimension,
+    assert_get_by_ids_behavior, assert_llm_generate_texts, assert_llm_invoke_response,
+    assert_llm_token_usage, assert_query_and_documents_share_dimension,
     assert_similarity_search_finds_expected_document, assert_usage_tokens,
 };
 
@@ -173,6 +174,21 @@ async fn embedding_helpers_validate_shape() {
         vec!["beta".to_owned(), "gamma".to_owned()],
     )
     .await;
+}
+
+#[tokio::test]
+async fn llm_helpers_validate_text_and_usage() {
+    let model = ParrotLLM::new("parrot-llm", 5);
+
+    assert_llm_invoke_response(&model, "alphabet", "alpha").await;
+    let result = assert_llm_generate_texts(
+        &model,
+        vec!["alphabet".to_owned(), "beta".to_owned()],
+        &["alpha", "beta"],
+    )
+    .await;
+
+    assert_llm_token_usage(result.llm_output(), 12, 9).expect("llm usage metadata should match");
 }
 
 #[tokio::test]
