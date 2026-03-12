@@ -29,11 +29,13 @@ pub fn init_embeddings(
             ),
         )),
         "nomic" => Ok(Box::new(langchain_nomic::NomicEmbeddings::new(model))),
-        "ollama" => Ok(Box::new(langchain_ollama::OllamaEmbeddings::new_with_base_url(
-            model,
-            require_base_url(&provider_key, resolved_base_url.as_deref())?,
-            api_key,
-        ))),
+        "ollama" => Ok(Box::new(
+            langchain_ollama::OllamaEmbeddings::new_with_base_url(
+                model,
+                require_base_url(&provider_key, resolved_base_url.as_deref())?,
+                api_key,
+            ),
+        )),
         "openai" => Ok(Box::new(langchain_openai::OpenAIEmbeddings::new(
             model,
             require_base_url(&provider_key, resolved_base_url.as_deref())?,
@@ -60,9 +62,7 @@ fn parse_model_string(model_name: &str) -> Result<(String, String), LangChainErr
     let provider_key = normalize_provider_key(provider_key);
     let model = model.trim().to_owned();
 
-    if provider(&provider_key)
-        .is_none_or(|profile| !profile.capabilities.embeddings)
-    {
+    if provider(&provider_key).is_none_or(|profile| !profile.capabilities.embeddings) {
         return Err(LangChainError::unsupported(format!(
             "Provider '{provider_key}' is not supported.\nSupported providers and their required packages:\n{}",
             provider_list()
@@ -86,9 +86,7 @@ fn infer_model_and_provider(
     }
 
     if let Some(provider_key) = provider_key.map(normalize_provider_key) {
-        if provider(&provider_key)
-            .is_none_or(|profile| !profile.capabilities.embeddings)
-        {
+        if provider(&provider_key).is_none_or(|profile| !profile.capabilities.embeddings) {
             return Err(LangChainError::unsupported(format!(
                 "Provider '{provider_key}' is not supported.\nSupported providers and their required packages:\n{}",
                 provider_list()
@@ -121,9 +119,9 @@ fn provider_list() -> String {
 }
 
 fn resolve_base_url(provider_key: &str, explicit_base_url: Option<&str>) -> Option<String> {
-    explicit_base_url
-        .map(str::to_owned)
-        .or_else(|| provider(provider_key).and_then(|profile| profile.default_base_url.map(str::to_owned)))
+    explicit_base_url.map(str::to_owned).or_else(|| {
+        provider(provider_key).and_then(|profile| profile.default_base_url.map(str::to_owned))
+    })
 }
 
 fn require_base_url(provider_key: &str, base_url: Option<&str>) -> Result<String, LangChainError> {

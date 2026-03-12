@@ -5,6 +5,55 @@
 //! facade crates. The implementation is intentionally minimal for now, but the
 //! package boundary is real and ready to absorb classic-only modules later.
 
+pub mod chains;
+
+pub mod documents {
+    pub use langchain_core::documents::*;
+}
+
+pub mod embeddings {
+    pub use langchain_core::embeddings::*;
+}
+
+pub mod language_models {
+    pub use langchain_core::language_models::*;
+}
+
+pub mod llms {
+    pub use langchain_core::language_models::{BaseLLM, ParrotLLM};
+}
+
+pub mod messages {
+    pub use langchain_core::messages::*;
+}
+
+pub mod prompt_values {
+    pub use langchain_core::prompt_values::*;
+}
+
+pub mod prompts {
+    pub use langchain_core::prompts::*;
+}
+
+pub mod retrievers {
+    pub use langchain_core::retrievers::*;
+}
+
+pub mod runnables {
+    pub use langchain_core::runnables::*;
+}
+
+pub mod tools {
+    pub use langchain_core::tools::*;
+}
+
+pub mod vectorstores {
+    pub use langchain_core::vectorstores::*;
+}
+
+pub use chains::{ConversationChain, LLMChain};
+pub use langchain_core::LangChainError;
+
 /// Marker type for the classic/legacy package boundary.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ClassicPackage;

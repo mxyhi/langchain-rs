@@ -1,3 +1,4 @@
+use std::marker::PhantomData;
 use std::sync::Arc;
 
 use futures_util::future::BoxFuture;
@@ -17,6 +18,77 @@ pub trait BaseTool: Send + Sync {
         config: RunnableConfig,
     ) -> BoxFuture<'a, Result<ToolMessage, LangChainError>>;
 }
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InjectedToolArg;
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InjectedToolCallId;
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InjectedState<State>(pub PhantomData<State>);
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InjectedStore<Store>(pub PhantomData<Store>);
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolRuntime<State = Value, Store = Value> {
+    state: State,
+    store: Store,
+    tool_call_id: Option<String>,
+}
+
+impl<State, Store> ToolRuntime<State, Store> {
+    pub fn new(state: State, store: Store) -> Self {
+        Self {
+            state,
+            store,
+            tool_call_id: None,
+        }
+    }
+
+    pub fn with_tool_call_id(mut self, tool_call_id: impl Into<String>) -> Self {
+        self.tool_call_id = Some(tool_call_id.into());
+        self
+    }
+
+    pub fn state(&self) -> &State {
+        &self.state
+    }
+
+    pub fn store(&self) -> &Store {
+        &self.store
+    }
+
+    pub fn tool_call_id(&self) -> Option<&str> {
+        self.tool_call_id.as_deref()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolException {
+    message: String,
+}
+
+impl ToolException {
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
+    }
+
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+}
+
+impl std::fmt::Display for ToolException {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for ToolException {}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ToolDefinition {

@@ -1,3 +1,4 @@
+pub mod agents;
 pub mod chat_models;
 
 pub mod documents {
@@ -18,8 +19,18 @@ pub mod output_parsers {
     pub use langchain_core::output_parsers::*;
 }
 
+pub mod prompt_values {
+    pub use langchain_core::prompt_values::*;
+}
+
 pub mod prompts {
     pub use langchain_core::prompts::*;
+}
+
+pub mod rate_limiters;
+
+pub mod retrievers {
+    pub use langchain_core::retrievers::*;
 }
 
 pub mod runnables {

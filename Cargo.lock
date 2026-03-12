@@ -578,6 +578,11 @@ dependencies = [
 [[package]]
 name = "langchain-classic"
 version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "langchain-core",
+ "tokio",
+]
 
 [[package]]
 name = "langchain-core"

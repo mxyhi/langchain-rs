@@ -105,7 +105,12 @@ impl ConfigurableChatModel {
     ) -> Result<Box<dyn BaseChatModel>, LangChainError> {
         let (model, provider, runtime_base_url) = self.resolve_model_from_config(config)?;
         let base_url = self.base_url.as_deref().or(runtime_base_url.as_deref());
-        let mut resolved = init_chat_model(&model, provider.as_deref(), base_url, self.api_key.as_deref())?;
+        let mut resolved = init_chat_model(
+            &model,
+            provider.as_deref(),
+            base_url,
+            self.api_key.as_deref(),
+        )?;
 
         for operation in &self.queued_declarative_operations {
             match operation {
@@ -221,11 +226,13 @@ pub fn init_chat_model(
             require_base_url(&provider_key, resolved_base_url.as_deref())?,
             api_key,
         ))),
-        "deepseek" => Ok(Box::new(langchain_deepseek::ChatDeepSeek::new_with_base_url(
-            model,
-            require_base_url(&provider_key, resolved_base_url.as_deref())?,
-            api_key,
-        ))),
+        "deepseek" => Ok(Box::new(
+            langchain_deepseek::ChatDeepSeek::new_with_base_url(
+                model,
+                require_base_url(&provider_key, resolved_base_url.as_deref())?,
+                api_key,
+            ),
+        )),
         "fireworks" => Ok(Box::new(
             langchain_fireworks::ChatFireworks::new_with_base_url(
                 model,
@@ -238,9 +245,9 @@ pub fn init_chat_model(
             require_base_url(&provider_key, resolved_base_url.as_deref())?,
             api_key,
         ))),
-        "huggingface" => Ok(Box::new(langchain_huggingface::ChatHuggingFace::from_model_id(
-            model,
-        ))),
+        "huggingface" => Ok(Box::new(
+            langchain_huggingface::ChatHuggingFace::from_model_id(model),
+        )),
         "mistralai" => Ok(Box::new(
             langchain_mistralai::ChatMistralAI::new_with_base_url(
                 model,
@@ -314,9 +321,7 @@ fn parse_model(
             ))
         })?;
 
-    if provider(&model_provider)
-        .is_none_or(|profile| !profile.capabilities.chat_model)
-    {
+    if provider(&model_provider).is_none_or(|profile| !profile.capabilities.chat_model) {
         return Err(LangChainError::unsupported(format!(
             "Unsupported provider='{model_provider}'. Supported providers are: {}",
             supported_providers()
@@ -339,9 +344,9 @@ fn split_provider_model(model: &str) -> Option<(String, String)> {
 }
 
 fn resolve_base_url(provider_key: &str, explicit_base_url: Option<&str>) -> Option<String> {
-    explicit_base_url
-        .map(str::to_owned)
-        .or_else(|| provider(provider_key).and_then(|profile| profile.default_base_url.map(str::to_owned)))
+    explicit_base_url.map(str::to_owned).or_else(|| {
+        provider(provider_key).and_then(|profile| profile.default_base_url.map(str::to_owned))
+    })
 }
 
 fn require_base_url(provider_key: &str, base_url: Option<&str>) -> Result<String, LangChainError> {
