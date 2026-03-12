@@ -6,7 +6,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use crate::LangChainError;
+use crate::documents::Document;
 use crate::messages::{ToolCall, ToolMessage, ToolMessageStatus};
+use crate::retrievers::BaseRetriever;
 use crate::runnables::RunnableConfig;
 
 pub trait BaseTool: Send + Sync {
@@ -17,6 +19,10 @@ pub trait BaseTool: Send + Sync {
         input: ToolCall,
         config: RunnableConfig,
     ) -> BoxFuture<'a, Result<ToolMessage, LangChainError>>;
+}
+
+pub trait BaseToolkit: Send + Sync {
+    fn tools(&self) -> Vec<Box<dyn BaseTool>>;
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -90,6 +96,31 @@ impl std::fmt::Display for ToolException {
 
 impl std::error::Error for ToolException {}
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SchemaAnnotationError {
+    message: String,
+}
+
+impl SchemaAnnotationError {
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
+    }
+
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+}
+
+impl std::fmt::Display for SchemaAnnotationError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for SchemaAnnotationError {}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ToolDefinition {
     name: String,
@@ -142,8 +173,55 @@ pub fn tool(name: impl Into<String>, description: impl Into<String>) -> ToolDefi
     ToolDefinition::new(name, description)
 }
 
+type ToolHandler =
+    dyn Fn(String) -> BoxFuture<'static, Result<String, LangChainError>> + Send + Sync;
 type StructuredToolHandler =
     dyn Fn(Value) -> BoxFuture<'static, Result<Value, LangChainError>> + Send + Sync;
+
+#[derive(Clone)]
+pub struct Tool {
+    definition: ToolDefinition,
+    handler: Arc<ToolHandler>,
+}
+
+impl Tool {
+    pub fn new(
+        definition: ToolDefinition,
+        handler: impl Fn(String) -> BoxFuture<'static, Result<String, LangChainError>>
+        + Send
+        + Sync
+        + 'static,
+    ) -> Self {
+        Self {
+            definition,
+            handler: Arc::new(handler),
+        }
+    }
+}
+
+impl BaseTool for Tool {
+    fn definition(&self) -> &ToolDefinition {
+        &self.definition
+    }
+
+    fn invoke<'a>(
+        &'a self,
+        input: ToolCall,
+        _config: RunnableConfig,
+    ) -> BoxFuture<'a, Result<ToolMessage, LangChainError>> {
+        Box::pin(async move {
+            let tool_input = extract_named_string_argument(input.args(), "input")?;
+            let output = (self.handler)(tool_input).await?;
+            Ok(ToolMessage::with_parts(
+                output.clone(),
+                input.id().unwrap_or_default(),
+                Some(self.definition.name()),
+                Some(Value::String(output)),
+                ToolMessageStatus::Success,
+            ))
+        })
+    }
+}
 
 #[derive(Clone)]
 pub struct StructuredTool {
@@ -192,4 +270,89 @@ impl BaseTool for StructuredTool {
             ))
         })
     }
+}
+
+pub type ToolsRenderer = fn(&[&dyn BaseTool]) -> String;
+
+pub fn render_text_description(tools: &[&dyn BaseTool]) -> String {
+    tools
+        .iter()
+        .map(|tool| {
+            let definition = tool.definition();
+            format!("{}: {}", definition.name(), definition.description())
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+pub fn render_text_description_and_args(tools: &[&dyn BaseTool]) -> String {
+    tools
+        .iter()
+        .map(|tool| {
+            let definition = tool.definition();
+            format!(
+                "{}: {} | args={}",
+                definition.name(),
+                definition.description(),
+                definition.parameters()
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+pub fn create_retriever_tool<R>(
+    retriever: R,
+    name: impl Into<String>,
+    description: impl Into<String>,
+) -> StructuredTool
+where
+    R: BaseRetriever + Send + Sync + 'static,
+{
+    let retriever = Arc::new(retriever);
+    let definition = ToolDefinition::new(name, description).with_parameters(json!({
+        "type": "object",
+        "properties": {
+            "query": { "type": "string" }
+        },
+        "required": ["query"]
+    }));
+
+    StructuredTool::new(definition, move |input| {
+        let retriever = Arc::clone(&retriever);
+        Box::pin(async move {
+            let query = extract_named_string_argument(&input, "query")?;
+            let documents = retriever
+                .get_relevant_documents(&query, RunnableConfig::default())
+                .await?;
+
+            // Keep the transport honest: return structured document records rather than
+            // inventing a provider-specific schema.
+            Ok(Value::Array(
+                documents.into_iter().map(document_to_value).collect(),
+            ))
+        })
+    })
+}
+
+fn extract_named_string_argument(input: &Value, key: &str) -> Result<String, LangChainError> {
+    match input {
+        Value::String(value) if key == "input" => Ok(value.clone()),
+        Value::Object(map) => map
+            .get(key)
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+            .ok_or_else(|| LangChainError::request(format!("tool input must include `{key}`"))),
+        _ => Err(LangChainError::request(format!(
+            "tool input must be a string or object containing `{key}`"
+        ))),
+    }
+}
+
+fn document_to_value(document: Document) -> Value {
+    json!({
+        "page_content": document.page_content,
+        "metadata": document.metadata,
+        "id": document.id,
+    })
 }

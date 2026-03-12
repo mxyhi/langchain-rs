@@ -7,6 +7,7 @@ use serde_json::Value;
 use crate::LangChainError;
 use crate::documents::Document;
 use crate::embeddings::Embeddings;
+pub use crate::retrievers::VectorStoreRetriever;
 
 pub trait VectorStore: Send + Sync {
     fn add_documents<'a>(
