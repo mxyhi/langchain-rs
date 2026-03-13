@@ -44,3 +44,4 @@ assert_eq!(embeddings.model_name(), "text-embedding-3-small");
 - `tests/structured_output.rs`
 - `tests/namespace.rs`
 - `tests/moderation.rs`
+- `tests/boundaries.rs`

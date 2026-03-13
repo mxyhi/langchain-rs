@@ -17,29 +17,12 @@ pub mod _api {
     pub const CLASSIC_PACKAGE: &str = "langchain_classic";
 }
 
-pub mod adapters {
-    pub const CLASSIC_PACKAGE: &str = crate::_api::CLASSIC_PACKAGE;
-}
-
-pub mod document_transformers {
-    pub const CLASSIC_PACKAGE: &str = crate::_api::CLASSIC_PACKAGE;
-}
-
-pub mod evaluation {
-    pub const CLASSIC_PACKAGE: &str = crate::_api::CLASSIC_PACKAGE;
-}
-
-pub mod graphs {
-    pub const CLASSIC_PACKAGE: &str = crate::_api::CLASSIC_PACKAGE;
-}
-
-pub mod smith {
-    pub const CLASSIC_PACKAGE: &str = crate::_api::CLASSIC_PACKAGE;
-}
-
-pub mod agents {
-    pub use langchain::agents::*;
-}
+pub mod adapters;
+pub mod agents;
+pub mod document_transformers;
+pub mod evaluation;
+pub mod graphs;
+pub mod smith;
 
 pub mod cache {
     pub use langchain_core::caches::*;
@@ -210,7 +193,11 @@ pub mod vectorstores {
     pub use langchain_core::vectorstores::*;
 }
 
+pub use agents::{MRKLChain, ReActChain, SelfAskWithSearchChain};
 pub use chains::{ConversationChain, LLMChain};
+pub use chains::{
+    LLMCheckerChain, LLMMathChain, QAWithSourcesChain, VectorDBQA, VectorDBQAWithSourcesChain,
+};
 pub use docstore::{DocstoreFn, InMemoryDocstore, Wikipedia};
 pub use langchain_core::LangChainError;
 pub use prompts::{Prompt, PromptTemplate};

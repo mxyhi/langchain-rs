@@ -85,3 +85,58 @@ impl ConversationChain {
         vec![HumanMessage::new(input).into()]
     }
 }
+
+macro_rules! define_legacy_llm_chain {
+    ($name:ident, $purpose:literal) => {
+        pub struct $name {
+            inner: LLMChain,
+        }
+
+        impl $name {
+            pub fn new(llm: impl BaseLLM + 'static, prompt: PromptTemplate) -> Self {
+                Self {
+                    inner: LLMChain::new(llm, prompt),
+                }
+            }
+
+            pub const fn purpose(&self) -> &'static str {
+                $purpose
+            }
+
+            pub async fn run(&self, arguments: PromptArguments) -> Result<String, LangChainError> {
+                self.inner.run(arguments).await
+            }
+        }
+
+        impl Runnable<PromptArguments, String> for $name {
+            fn invoke<'a>(
+                &'a self,
+                input: PromptArguments,
+                _config: RunnableConfig,
+            ) -> BoxFuture<'a, Result<String, LangChainError>> {
+                Box::pin(async move { self.run(input).await })
+            }
+        }
+    };
+}
+
+define_legacy_llm_chain!(
+    LLMCheckerChain,
+    "LLM checker compatibility chain for classic validation flows."
+);
+define_legacy_llm_chain!(
+    LLMMathChain,
+    "Legacy math-oriented chain compatibility surface."
+);
+define_legacy_llm_chain!(
+    QAWithSourcesChain,
+    "Question-answering chain compatibility surface that keeps sources in scope."
+);
+define_legacy_llm_chain!(
+    VectorDBQA,
+    "Legacy vector database QA compatibility surface."
+);
+define_legacy_llm_chain!(
+    VectorDBQAWithSourcesChain,
+    "Legacy vector database QA chain that keeps sources in scope."
+);

@@ -10,6 +10,9 @@ use langchain_classic::utils::{
     stringify_dict, stringify_value,
 };
 use langchain_core::documents::Document;
+use langchain_core::language_models::{ParrotChatModel, ParrotLLM};
+use langchain_core::messages::HumanMessage;
+use langchain_core::prompts::{PromptArgument, PromptArguments, PromptTemplate};
 use serde_json::{Map, json};
 use tempfile::tempdir;
 
@@ -137,4 +140,140 @@ fn classic_root_and_namespace_aliases_expose_parity_surface() {
 
     let manager = langchain_classic::indexes::InMemoryRecordManager::new("classic-indexes");
     assert_eq!(manager.namespace(), "classic-indexes");
+}
+
+#[tokio::test]
+async fn classic_boundary_modules_expose_real_surface() {
+    let message = HumanMessage::new("hello classic").into();
+    let openai_dict = langchain_classic::adapters::openai::convert_message_to_dict(&message);
+    assert_eq!(openai_dict["role"], "user");
+    assert_eq!(openai_dict["content"], "hello classic");
+
+    let round_tripped =
+        langchain_classic::adapters::openai::convert_openai_messages(vec![openai_dict.clone()])
+            .expect("openai adapter conversion should succeed");
+    assert_eq!(round_tripped, vec![message.clone()]);
+
+    let html_docs = vec![
+        Document::new("<article><h1>Alpha</h1><p>Beta</p></article>"),
+        Document::new("<div>Gamma</div>"),
+    ];
+    let html2text = langchain_classic::document_transformers::Html2TextTransformer::new();
+    let plain_docs = html2text.transform_documents(html_docs.clone());
+    assert_eq!(plain_docs[0].page_content, "Alpha Beta");
+
+    let reordered = langchain_classic::document_transformers::LongContextReorder::new()
+        .transform_documents(vec![
+            Document::new("first"),
+            Document::new("second"),
+            Document::new("third"),
+            Document::new("fourth"),
+        ]);
+    assert_eq!(
+        reordered
+            .iter()
+            .map(|document| document.page_content.as_str())
+            .collect::<Vec<_>>(),
+        vec!["first", "fourth", "second", "third"]
+    );
+
+    let evaluator = langchain_classic::evaluation::load_evaluator(
+        langchain_classic::evaluation::EvaluatorType::ExactMatch,
+    )
+    .expect("exact-match evaluator should load");
+    let evaluation = evaluator.evaluate_strings("same", Some("same"), None);
+    assert_eq!(evaluation.score, Some(1.0));
+    assert_eq!(evaluation.value, Some(true));
+
+    let graph = langchain_classic::graphs::Neo4jGraph::new("bolt://localhost:7687");
+    assert_eq!(graph.provider_name(), "neo4j");
+    assert_eq!(graph.uri(), "bolt://localhost:7687");
+    assert!(!graph.is_remote_connected());
+
+    let runs = langchain_classic::smith::run_on_dataset(
+        &[
+            langchain_classic::smith::DatasetExample::new("same", Some("same")),
+            langchain_classic::smith::DatasetExample::new("same", Some("different")),
+        ],
+        &langchain_classic::smith::RunEvalConfig::default()
+            .with_evaluator(langchain_classic::evaluation::EvaluatorType::ExactMatch),
+    )
+    .expect("smith dataset runner should evaluate rows");
+    assert_eq!(runs.summary().total_examples, 2);
+    assert_eq!(runs.summary().successful_evaluations, 2);
+    assert_eq!(runs.summary().average_score, Some(0.5));
+}
+
+#[tokio::test]
+async fn classic_root_reexports_legacy_names_without_faking_support() {
+    let mrkl = langchain_classic::MRKLChain::new(ParrotChatModel::new("classic-agent", 12));
+    let react = langchain_classic::ReActChain::new(ParrotChatModel::new("classic-agent", 12));
+    let self_ask =
+        langchain_classic::SelfAskWithSearchChain::new(ParrotChatModel::new("classic-agent", 12));
+
+    assert_eq!(mrkl.strategy_name(), "mrkl");
+    assert_eq!(react.strategy_name(), "react");
+    assert_eq!(self_ask.strategy_name(), "self-ask-with-search");
+
+    let prompt = PromptTemplate::new("Answer {input}");
+    let arguments: PromptArguments = [(
+        "input".to_owned(),
+        PromptArgument::String("ping".to_owned()),
+    )]
+    .into();
+
+    let checker =
+        langchain_classic::LLMCheckerChain::new(ParrotLLM::new("classic-llm", 32), prompt.clone());
+    let math =
+        langchain_classic::LLMMathChain::new(ParrotLLM::new("classic-llm", 32), prompt.clone());
+    let qa = langchain_classic::QAWithSourcesChain::new(
+        ParrotLLM::new("classic-llm", 32),
+        prompt.clone(),
+    );
+    let vectordb =
+        langchain_classic::VectorDBQA::new(ParrotLLM::new("classic-llm", 32), prompt.clone());
+    let vectordb_sources = langchain_classic::VectorDBQAWithSourcesChain::new(
+        ParrotLLM::new("classic-llm", 32),
+        prompt,
+    );
+
+    assert!(checker.purpose().contains("LLM checker"));
+    assert!(math.purpose().contains("math"));
+    assert!(qa.purpose().contains("sources"));
+    assert!(vectordb.purpose().contains("vector"));
+    assert!(vectordb_sources.purpose().contains("sources"));
+
+    assert!(
+        checker
+            .run(arguments.clone())
+            .await
+            .expect("checker chain should run")
+            .contains("Answer ping")
+    );
+    assert!(
+        math.run(arguments.clone())
+            .await
+            .expect("math chain should run")
+            .contains("Answer ping")
+    );
+    assert!(
+        qa.run(arguments.clone())
+            .await
+            .expect("qa chain should run")
+            .contains("Answer ping")
+    );
+    assert!(
+        vectordb
+            .run(arguments.clone())
+            .await
+            .expect("vectordb chain should run")
+            .contains("Answer ping")
+    );
+    assert!(
+        vectordb_sources
+            .run(arguments)
+            .await
+            .expect("vectordb-with-sources chain should run")
+            .contains("Answer ping")
+    );
 }

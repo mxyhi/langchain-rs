@@ -43,4 +43,4 @@ assert_eq!(embeddings.base_url(), "https://api.fireworks.ai/inference/v1");
 
 - `tests/provider.rs`
 - `tests/namespace.rs`
-
+- `tests/transport.rs`
