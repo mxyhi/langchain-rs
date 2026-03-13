@@ -46,7 +46,7 @@ fn classic_utils_reexport_core_utility_helpers() {
 
 #[test]
 fn classic_docstore_and_storage_helpers_round_trip_documents() {
-    let mut docstore = InMemoryDocstore::new();
+    let docstore = InMemoryDocstore::new();
     let alpha = Document::new("alpha");
     docstore.add("doc-1", alpha.clone());
     assert_eq!(
