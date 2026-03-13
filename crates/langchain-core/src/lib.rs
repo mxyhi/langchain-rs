@@ -4,6 +4,7 @@ pub mod callbacks;
 pub mod chat_history;
 pub mod chat_loaders;
 pub mod chat_sessions;
+pub mod cross_encoders;
 pub mod document_loaders;
 pub mod documents;
 pub mod embeddings;

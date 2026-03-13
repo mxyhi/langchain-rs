@@ -1,8 +1,10 @@
 use std::sync::Arc;
 
+use futures_util::future::BoxFuture;
 use langchain_core::caches::{BaseCache, InMemoryCache};
 use langchain_core::chat_history::InMemoryChatMessageHistory;
 use langchain_core::chat_sessions::ChatSession;
+use langchain_core::cross_encoders::{BaseCrossEncoder, TextPair};
 use langchain_core::exceptions::LangChainException;
 use langchain_core::globals::{
     get_debug, get_llm_cache, get_verbose, set_debug, set_llm_cache, set_verbose,
@@ -10,6 +12,22 @@ use langchain_core::globals::{
 use langchain_core::messages::{AIMessage, HumanMessage};
 use langchain_core::outputs::Generation;
 use langchain_core::version::VERSION as VERSION_MODULE;
+
+struct StaticCrossEncoder;
+
+impl BaseCrossEncoder for StaticCrossEncoder {
+    fn score<'a>(
+        &'a self,
+        text_pairs: Vec<TextPair>,
+    ) -> BoxFuture<'a, Result<Vec<f32>, langchain_core::LangChainError>> {
+        Box::pin(async move {
+            Ok(text_pairs
+                .into_iter()
+                .map(|(left, right)| if left == right { 1.0 } else { 0.25 })
+                .collect())
+        })
+    }
+}
 
 #[test]
 fn in_memory_cache_round_trips_generations() {
@@ -94,4 +112,18 @@ fn exceptions_and_version_are_addressable_through_python_like_paths() {
 
     assert!(error.to_string().contains("boom"));
     assert_eq!(langchain_core::VERSION, VERSION_MODULE);
+}
+
+#[tokio::test]
+async fn cross_encoder_trait_scores_text_pairs() {
+    let encoder = StaticCrossEncoder;
+    let scores = encoder
+        .score(vec![
+            ("alpha".to_owned(), "alpha".to_owned()),
+            ("alpha".to_owned(), "beta".to_owned()),
+        ])
+        .await
+        .expect("cross encoder scoring should succeed");
+
+    assert_eq!(scores, vec![1.0, 0.25]);
 }
