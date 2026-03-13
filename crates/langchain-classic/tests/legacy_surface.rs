@@ -23,6 +23,7 @@ use langchain_classic::text_splitter::{
     CharacterTextSplitter, RecursiveCharacterTextSplitter, TextSplitter, TokenTextSplitter,
     Tokenizer, split_text_on_tokens,
 };
+use langchain_classic::utils::{comma_list, get_from_env, stringify_dict};
 use langchain_classic::{Prompt, PromptTemplate};
 use langchain_core::chat_sessions::ChatSession;
 use langchain_core::documents::Document;
@@ -253,6 +254,42 @@ async fn classic_reexports_callbacks_chat_loaders_load_storage_and_utils() {
         .expect("nested utils formatting facade should render");
     assert_eq!(formatted, "Hello Rust");
     assert!(langchain_classic::utils::input::get_bolded_text("hi").contains("hi"));
+}
+
+#[test]
+fn classic_utils_schema_docstore_and_indexes_match_reference_facades() {
+    let rendered = stringify_dict(&serde_json::Map::from_iter([(
+        "status".to_owned(),
+        json!("ok"),
+    )]));
+    assert!(rendered.contains("status: ok"));
+    assert_eq!(comma_list(["alpha", "beta", "gamma"]), "alpha, beta, gamma");
+
+    unsafe {
+        std::env::set_var("LANGCHAIN_CLASSIC_TEST_ENV", "available");
+    }
+    assert_eq!(
+        get_from_env("api_key", "LANGCHAIN_CLASSIC_TEST_ENV", None)
+            .expect("env helper should resolve classic utility values"),
+        "available"
+    );
+    unsafe {
+        std::env::remove_var("LANGCHAIN_CLASSIC_TEST_ENV");
+    }
+
+    let docstore = langchain_classic::docstore::InMemoryDocstore::new()
+        .with_document("doc-1", Document::new("classic docstore"));
+    assert_eq!(
+        docstore.search("doc-1"),
+        Some(Document::new("classic docstore"))
+    );
+
+    let callback_error = langchain_classic::schema::LangChainException::request("boom");
+    assert!(callback_error.to_string().contains("boom"));
+    assert_eq!(langchain_classic::schema::RUN_KEY, "__run");
+
+    let doc = langchain_classic::indexes::Document::new("indexed alias");
+    assert_eq!(doc.page_content, "indexed alias");
 }
 
 #[tokio::test]

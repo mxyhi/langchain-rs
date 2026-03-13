@@ -9,7 +9,33 @@
 pub mod base_language;
 pub mod base_memory;
 pub mod chains;
+pub mod docstore;
 pub mod example_generator;
+pub mod storage;
+
+pub mod _api {
+    pub const CLASSIC_PACKAGE: &str = "langchain_classic";
+}
+
+pub mod adapters {
+    pub const CLASSIC_PACKAGE: &str = crate::_api::CLASSIC_PACKAGE;
+}
+
+pub mod document_transformers {
+    pub const CLASSIC_PACKAGE: &str = crate::_api::CLASSIC_PACKAGE;
+}
+
+pub mod evaluation {
+    pub const CLASSIC_PACKAGE: &str = crate::_api::CLASSIC_PACKAGE;
+}
+
+pub mod graphs {
+    pub const CLASSIC_PACKAGE: &str = crate::_api::CLASSIC_PACKAGE;
+}
+
+pub mod smith {
+    pub const CLASSIC_PACKAGE: &str = crate::_api::CLASSIC_PACKAGE;
+}
 
 pub mod agents {
     pub use langchain::agents::*;
@@ -126,18 +152,20 @@ pub mod tools {
 }
 
 pub mod schema {
+    pub use crate::base_memory::BaseMemory;
+    pub use langchain_core::caches::BaseCache;
+    pub use langchain_core::chat_history::BaseChatMessageHistory;
     pub use langchain_core::documents::Document;
+    pub use langchain_core::exceptions::LangChainException;
     pub use langchain_core::messages::*;
     pub use langchain_core::outputs::*;
     pub use langchain_core::prompt_values::*;
-}
+    pub use langchain_core::retrievers::BaseRetriever;
+    pub use langchain_core::stores::BaseStore;
 
-pub mod docstore {
-    pub use langchain_core::documents::Document;
-}
-
-pub mod storage {
-    pub use langchain_core::stores::*;
+    pub const RUN_KEY: &str = "__run";
+    pub type Memory = dyn BaseMemory;
+    pub use langchain_core::messages::message_to_dict as _message_to_dict;
 }
 
 pub mod document_loaders {
@@ -146,6 +174,11 @@ pub mod document_loaders {
 
 pub mod indexing {
     pub use langchain_core::indexing::*;
+}
+
+pub mod indexes {
+    pub use crate::indexing::*;
+    pub use langchain_core::documents::Document;
 }
 
 pub mod utilities {
@@ -157,6 +190,13 @@ pub mod utilities {
 }
 
 pub mod utils {
+    pub use langchain_core::utils::{
+        _dict_int_op, Uuid, abatch_iterate, add_usage, batch_iterate, build_extra_kwargs,
+        comma_list, ensure_id, env_var_is_set, from_env, get_from_dict_or_env, get_from_env,
+        sanitize_for_postgres, secret_from_env, stringify_dict, stringify_value, subtract_usage,
+        uuid7,
+    };
+
     pub mod formatting {
         pub use crate::formatting::*;
     }
@@ -171,8 +211,13 @@ pub mod vectorstores {
 }
 
 pub use chains::{ConversationChain, LLMChain};
+pub use docstore::{DocstoreFn, InMemoryDocstore, Wikipedia};
 pub use langchain_core::LangChainError;
 pub use prompts::{Prompt, PromptTemplate};
+pub use python::PythonREPL;
+pub use requests::{Requests, RequestsWrapper, TextRequestsWrapper};
+pub use serpapi::SerpAPIWrapper;
+pub use sql_database::SQLDatabase;
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Marker type for the classic/legacy package boundary.
