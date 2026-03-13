@@ -122,12 +122,9 @@ async fn huggingface_remote_boundaries_route_to_hf_inference_endpoints() {
         .expect("embeddings transport should succeed");
     assert_eq!(embedding, vec![0.1, 0.2, 0.3]);
 
-    assert!(
-        pipeline
-            .generate(vec!["ping".to_owned()], Default::default())
-            .await
-            .expect_err("pipeline transport should still be unsupported")
-            .to_string()
-            .contains("local pipeline")
+    assert!(!pipeline.is_available());
+    assert_eq!(
+        pipeline.unavailability_reason(),
+        "HuggingFacePipeline is a boundary marker for local transformers pipelines and is not exposed as a runnable Rust BaseLLM"
     );
 }

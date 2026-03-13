@@ -1,6 +1,6 @@
 # langchain-huggingface
 
-Hugging Face chat, endpoint, pipeline, and embeddings integrations.
+Hugging Face chat, endpoint, pipeline-boundary, and embeddings integrations.
 
 ## Upstream Mapping
 
@@ -31,6 +31,7 @@ let embeddings = HuggingFaceEmbeddings::new("sentence-transformers/all-mpnet-bas
 assert_eq!(chat.model_name(), "meta-llama/Llama-3.1-8B-Instruct:hf-inference");
 assert_eq!(endpoint.model_name(), "mistralai/Mistral-7B-Instruct-v0.3");
 assert_eq!(pipeline.model_name(), "meta-llama/Llama-3.1-8B-Instruct");
+assert!(!pipeline.is_available());
 assert_eq!(embeddings.model_name(), "sentence-transformers/all-mpnet-base-v2");
 ```
 
@@ -38,11 +39,11 @@ assert_eq!(embeddings.model_name(), "sentence-transformers/all-mpnet-base-v2");
 
 - `ChatHuggingFace`
 - `HuggingFaceEmbeddings`, `HuggingFaceEndpointEmbeddings`
-- `HuggingFaceEndpoint`, `HuggingFacePipeline`
-- `chat_models`, `embeddings`, `llms` namespaces
+- `HuggingFaceEndpoint`
+- `HuggingFacePipeline` as an explicit local-pipeline boundary marker, not a runnable `BaseLLM`
+- `chat_models`, `embeddings`, `llms`, `pipelines` namespaces
 
 ## Tests
 
 - `tests/boundaries.rs`
 - `tests/namespace.rs`
-

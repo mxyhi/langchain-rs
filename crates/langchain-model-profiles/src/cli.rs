@@ -9,6 +9,7 @@ use serde_json::{Map, Value, json};
 use crate::{ProviderCapabilities, ProviderProfile, provider, providers};
 
 const MODELS_DEV_CATALOG_URL: &str = "https://models.dev/api.json";
+const MODELS_DEV_CATALOG_URL_ENV: &str = "LANGCHAIN_MODEL_PROFILES_CATALOG_URL";
 const GENERATED_PROFILES_FILENAME: &str = "_profiles.json";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -347,30 +348,37 @@ fn load_catalog(source: Option<&Path>) -> Result<Value, CliError> {
             })
         }
         None => {
+            let catalog_url = models_dev_catalog_url();
             let runtime = tokio::runtime::Runtime::new().map_err(|error| {
                 CliError::failure(format!("failed to start runtime for refresh: {error}"))
             })?;
             runtime.block_on(async {
-                let response = reqwest::get(MODELS_DEV_CATALOG_URL)
-                    .await
-                    .map_err(|error| {
-                        CliError::failure(format!(
-                            "failed to fetch models.dev catalog {MODELS_DEV_CATALOG_URL}: {error}"
-                        ))
-                    })?;
+                let response = reqwest::get(&catalog_url).await.map_err(|error| {
+                    CliError::failure(format!(
+                        "failed to fetch models.dev catalog {catalog_url}: {error}"
+                    ))
+                })?;
                 let response = response.error_for_status().map_err(|error| {
                     CliError::failure(format!(
-                        "models.dev catalog request failed {MODELS_DEV_CATALOG_URL}: {error}"
+                        "models.dev catalog request failed {catalog_url}: {error}"
                     ))
                 })?;
                 response.json::<Value>().await.map_err(|error| {
                     CliError::failure(format!(
-                        "failed to decode models.dev catalog {MODELS_DEV_CATALOG_URL}: {error}"
+                        "failed to decode models.dev catalog {catalog_url}: {error}"
                     ))
                 })
             })
         }
     }
+}
+
+fn models_dev_catalog_url() -> String {
+    std::env::var(MODELS_DEV_CATALOG_URL_ENV)
+        .ok()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| MODELS_DEV_CATALOG_URL.to_owned())
 }
 
 fn extract_models_for_provider<'a>(

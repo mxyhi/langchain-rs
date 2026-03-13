@@ -372,28 +372,24 @@ pub struct HuggingFacePipeline {
 }
 
 impl HuggingFacePipeline {
+    pub const UNAVAILABILITY_REASON: &str = "HuggingFacePipeline is a boundary marker for local transformers pipelines and is not exposed as a runnable Rust BaseLLM";
+
     pub fn new(model_id: impl Into<String>) -> Self {
         Self {
             model_id: model_id.into(),
         }
     }
-}
 
-impl BaseLLM for HuggingFacePipeline {
-    fn model_name(&self) -> &str {
+    pub fn model_name(&self) -> &str {
         &self.model_id
     }
 
-    fn generate<'a>(
-        &'a self,
-        _prompts: Vec<String>,
-        _config: RunnableConfig,
-    ) -> BoxFuture<'a, Result<LLMResult, LangChainError>> {
-        Box::pin(async move {
-            Err(LangChainError::unsupported(
-                "HuggingFacePipeline is a real boundary type in this milestone, but its local pipeline transport is not implemented in Rust yet",
-            ))
-        })
+    pub const fn is_available(&self) -> bool {
+        false
+    }
+
+    pub const fn unavailability_reason(&self) -> &'static str {
+        Self::UNAVAILABILITY_REASON
     }
 }
 
@@ -572,5 +568,9 @@ pub mod embeddings {
 }
 
 pub mod llms {
-    pub use crate::{HuggingFaceEndpoint, HuggingFacePipeline};
+    pub use crate::HuggingFaceEndpoint;
+}
+
+pub mod pipelines {
+    pub use crate::HuggingFacePipeline;
 }

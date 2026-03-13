@@ -183,7 +183,6 @@ pub const PROVIDERS: &[ProviderProfile] = &[
             "HuggingFaceEmbeddings",
             "HuggingFaceEndpointEmbeddings",
             "HuggingFaceEndpoint",
-            "HuggingFacePipeline",
         ],
     },
     ProviderProfile {

@@ -1,5 +1,3 @@
-use langchain_core::language_models::BaseLLM;
-
 #[test]
 fn huggingface_namespaces_match_root_exports() {
     let chat = langchain_huggingface::chat_models::ChatHuggingFace::from_model_id(
@@ -31,7 +29,9 @@ fn huggingface_namespaces_match_root_exports() {
         Some("http://localhost:8081")
     );
 
-    let pipeline =
-        langchain_huggingface::llms::HuggingFacePipeline::new("meta-llama/Llama-3.1-8B-Instruct");
+    let pipeline = langchain_huggingface::pipelines::HuggingFacePipeline::new(
+        "meta-llama/Llama-3.1-8B-Instruct",
+    );
     assert_eq!(pipeline.model_name(), "meta-llama/Llama-3.1-8B-Instruct");
+    assert!(!pipeline.is_available());
 }
