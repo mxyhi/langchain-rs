@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt;
 use std::sync::RwLock;
 
 use langchain_core::messages::{
@@ -16,6 +17,68 @@ pub use langchain_core::chat_history::{BaseChatMessageHistory, InMemoryChatMessa
 
 const DEFAULT_MEMORY_KEY: &str = "history";
 const DEFAULT_OUTPUT_KEY: &str = "output";
+
+#[derive(Debug, Default)]
+pub struct SimpleMemory {
+    memories: BTreeMap<String, Value>,
+}
+
+impl SimpleMemory {
+    pub fn new(memories: impl IntoIterator<Item = (impl Into<String>, Value)>) -> Self {
+        Self {
+            memories: memories
+                .into_iter()
+                .map(|(key, value)| (key.into(), value))
+                .collect(),
+        }
+    }
+}
+
+impl BaseMemory for SimpleMemory {
+    fn memory_variables(&self) -> Vec<String> {
+        self.memories.keys().cloned().collect()
+    }
+
+    fn load_memory_variables(&self, _inputs: BTreeMap<String, Value>) -> BTreeMap<String, Value> {
+        self.memories.clone()
+    }
+
+    fn save_context(&self, _inputs: BTreeMap<String, Value>, _outputs: BTreeMap<String, Value>) {}
+
+    fn clear(&self) {}
+}
+
+#[derive(Debug)]
+pub struct ReadOnlySharedMemory<M> {
+    memory: M,
+}
+
+impl<M> ReadOnlySharedMemory<M> {
+    pub fn new(memory: M) -> Self {
+        Self { memory }
+    }
+
+    pub fn inner(&self) -> &M {
+        &self.memory
+    }
+}
+
+impl<M> BaseMemory for ReadOnlySharedMemory<M>
+where
+    M: BaseMemory,
+{
+    fn memory_variables(&self) -> Vec<String> {
+        self.memory.memory_variables()
+    }
+
+    fn load_memory_variables(&self, inputs: BTreeMap<String, Value>) -> BTreeMap<String, Value> {
+        self.memory.load_memory_variables(inputs)
+    }
+
+    fn save_context(&self, _inputs: BTreeMap<String, Value>, _outputs: BTreeMap<String, Value>) {}
+
+    fn clear(&self) {}
+}
 
 #[derive(Debug)]
 pub struct ConversationBufferMemory {
@@ -117,6 +180,136 @@ impl BaseMemory for ConversationBufferMemory {
     fn save_context(&self, inputs: BTreeMap<String, Value>, outputs: BTreeMap<String, Value>) {
         self.try_save_context(inputs, outputs)
             .expect("conversation buffer memory should resolve input and output keys")
+    }
+
+    fn clear(&self) {
+        self.chat_memory.clear();
+    }
+}
+
+#[derive(Debug)]
+pub struct ConversationBufferWindowMemory {
+    chat_memory: InMemoryChatMessageHistory,
+    input_key: Option<String>,
+    output_key: Option<String>,
+    return_messages: bool,
+    memory_key: String,
+    k: usize,
+}
+
+impl Default for ConversationBufferWindowMemory {
+    fn default() -> Self {
+        Self {
+            chat_memory: InMemoryChatMessageHistory::new(),
+            input_key: None,
+            output_key: None,
+            return_messages: false,
+            memory_key: DEFAULT_MEMORY_KEY.to_owned(),
+            k: 5,
+        }
+    }
+}
+
+impl ConversationBufferWindowMemory {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with_input_key(mut self, input_key: impl Into<String>) -> Self {
+        self.input_key = Some(input_key.into());
+        self
+    }
+
+    pub fn with_output_key(mut self, output_key: impl Into<String>) -> Self {
+        self.output_key = Some(output_key.into());
+        self
+    }
+
+    pub fn with_return_messages(mut self, return_messages: bool) -> Self {
+        self.return_messages = return_messages;
+        self
+    }
+
+    pub fn with_memory_key(mut self, memory_key: impl Into<String>) -> Self {
+        self.memory_key = memory_key.into();
+        self
+    }
+
+    pub fn with_k(mut self, k: usize) -> Self {
+        self.k = k;
+        self
+    }
+
+    pub fn buffer_as_messages(&self) -> Vec<BaseMessage> {
+        if self.k == 0 {
+            return Vec::new();
+        }
+
+        let messages = self.chat_memory.messages();
+        let window_size = self.k.saturating_mul(2);
+        let message_count = messages.len();
+
+        if message_count <= window_size {
+            return messages;
+        }
+
+        // `k` is counted in turns, so the visible window keeps the last 2*k messages.
+        messages
+            .into_iter()
+            .skip(message_count - window_size)
+            .collect()
+    }
+
+    pub fn buffer_as_str(&self) -> Result<String, LangChainError> {
+        get_buffer_string(
+            self.buffer_as_messages()
+                .into_iter()
+                .map(MessageLikeRepresentation::from),
+        )
+    }
+
+    pub fn try_save_context(
+        &self,
+        inputs: BTreeMap<String, Value>,
+        outputs: BTreeMap<String, Value>,
+    ) -> Result<(), LangChainError> {
+        let (input, output) = resolve_input_output(
+            &inputs,
+            &outputs,
+            self.input_key.as_deref(),
+            self.output_key.as_deref(),
+            &[self.memory_key.clone()],
+        )?;
+
+        self.chat_memory.add_messages(vec![
+            HumanMessage::new(input).into(),
+            AIMessage::new(output).into(),
+        ]);
+        Ok(())
+    }
+}
+
+impl BaseMemory for ConversationBufferWindowMemory {
+    fn memory_variables(&self) -> Vec<String> {
+        vec![self.memory_key.clone()]
+    }
+
+    fn load_memory_variables(&self, _inputs: BTreeMap<String, Value>) -> BTreeMap<String, Value> {
+        let value = if self.return_messages {
+            json!(messages_to_dict(&self.buffer_as_messages()))
+        } else {
+            json!(
+                self.buffer_as_str()
+                    .expect("conversation buffer window memory should render to a string")
+            )
+        };
+
+        [(self.memory_key.clone(), value)].into()
+    }
+
+    fn save_context(&self, inputs: BTreeMap<String, Value>, outputs: BTreeMap<String, Value>) {
+        self.try_save_context(inputs, outputs)
+            .expect("conversation buffer window memory should resolve input and output keys")
     }
 
     fn clear(&self) {
@@ -236,6 +429,78 @@ impl BaseMemory for ConversationStringBufferMemory {
             .write()
             .expect("conversation string buffer write lock poisoned")
             .clear();
+    }
+}
+
+pub struct CombinedMemory {
+    memories: Vec<Box<dyn BaseMemory>>,
+}
+
+impl CombinedMemory {
+    pub fn new(memories: Vec<Box<dyn BaseMemory>>) -> Result<Self, LangChainError> {
+        let mut all_variables = BTreeSet::new();
+        let mut duplicates = BTreeSet::new();
+
+        for memory in &memories {
+            for variable in memory.memory_variables() {
+                if !all_variables.insert(variable.clone()) {
+                    duplicates.insert(variable);
+                }
+            }
+        }
+
+        if !duplicates.is_empty() {
+            return Err(LangChainError::request(format!(
+                "The same variables {:?} are found in multiple memory objects, which is not allowed by CombinedMemory.",
+                duplicates
+            )));
+        }
+
+        Ok(Self { memories })
+    }
+}
+
+impl fmt::Debug for CombinedMemory {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("CombinedMemory")
+            .field("memory_variables", &self.memory_variables())
+            .finish()
+    }
+}
+
+impl BaseMemory for CombinedMemory {
+    fn memory_variables(&self) -> Vec<String> {
+        self.memories
+            .iter()
+            .flat_map(|memory| memory.memory_variables())
+            .collect()
+    }
+
+    fn load_memory_variables(&self, inputs: BTreeMap<String, Value>) -> BTreeMap<String, Value> {
+        let mut memory_data = BTreeMap::new();
+
+        for memory in &self.memories {
+            for (key, value) in memory.load_memory_variables(inputs.clone()) {
+                if memory_data.insert(key.clone(), value).is_some() {
+                    panic!("The variable {key} is repeated in the CombinedMemory.");
+                }
+            }
+        }
+
+        memory_data
+    }
+
+    fn save_context(&self, inputs: BTreeMap<String, Value>, outputs: BTreeMap<String, Value>) {
+        for memory in &self.memories {
+            memory.save_context(inputs.clone(), outputs.clone());
+        }
+    }
+
+    fn clear(&self) {
+        for memory in &self.memories {
+            memory.clear();
+        }
     }
 }
 

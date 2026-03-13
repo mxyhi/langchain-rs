@@ -109,6 +109,72 @@ fn middleware_types_are_constructible_and_overrideable() {
 }
 
 #[test]
+fn middleware_root_namespace_reexports_core_types_and_helpers() {
+    use langchain::agents::middleware::{
+        AgentMiddleware, AgentState as RootAgentState,
+        ExtendedModelResponse as RootExtendedModelResponse, ModelCallResult,
+        ModelRequest as RootModelRequest, ModelResponse as RootModelResponse,
+        ToolCallRequest as RootToolCallRequest, after_agent, after_model, before_agent,
+        before_model, dynamic_prompt, hook_config,
+    };
+
+    let model = Arc::new(ParrotChatModel::new("agent", 16));
+    let request = RootModelRequest::new(model, vec![HumanMessage::new("hello").into()])
+        .with_system_message(dynamic_prompt("be concise"))
+        .with_state(RootAgentState::new(vec![HumanMessage::new("hello").into()]));
+
+    let response: ModelCallResult = RootModelResponse::new(vec![AIMessage::new("done").into()]);
+    let extended = RootExtendedModelResponse::new(response.clone());
+    let hook = hook_config([]);
+
+    assert_eq!(request.messages().len(), 1);
+    assert_eq!(
+        request
+            .system_message()
+            .expect("system message should exist")
+            .content(),
+        "be concise"
+    );
+    assert_eq!(extended.model_response().result()[0].content(), "done");
+    assert!(hook.can_jump_to().is_empty());
+
+    assert_eq!(
+        before_agent(NoopMiddleware).name(),
+        std::any::type_name::<NoopMiddleware>()
+    );
+    assert_eq!(
+        before_model(NoopMiddleware).name(),
+        std::any::type_name::<NoopMiddleware>()
+    );
+    assert_eq!(
+        after_model(NoopMiddleware).name(),
+        std::any::type_name::<NoopMiddleware>()
+    );
+    assert_eq!(
+        after_agent(NoopMiddleware).name(),
+        std::any::type_name::<NoopMiddleware>()
+    );
+
+    let tool: Arc<dyn BaseTool> = Arc::new(Tool::new(
+        ToolDefinition::new("lookup", "Look up a record"),
+        |_input| Box::pin(async move { Ok("done".to_owned()) }),
+    ));
+    let tool_request = RootToolCallRequest::new(
+        ToolCall::new("lookup", json!({"input": "rust"})).with_id("call_lookup_root_1"),
+        json!({"messages": ["hello"]}),
+        ToolRuntime::new(json!({"messages": []}), json!({"writes": []}))
+            .with_tool_call_id("call_lookup_root_1"),
+    )
+    .with_tool(tool.clone());
+
+    assert_eq!(tool_request.tool_call().name(), "lookup");
+    assert!(Arc::ptr_eq(
+        tool_request.tool().expect("tool should be attached"),
+        &tool,
+    ));
+}
+
+#[test]
 fn middleware_types_reexport_tool_call_request_surface() {
     let tool: Arc<dyn BaseTool> = Arc::new(Tool::new(
         ToolDefinition::new("lookup", "Look up a record"),

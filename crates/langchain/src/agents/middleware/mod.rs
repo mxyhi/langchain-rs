@@ -33,3 +33,9 @@ pub use tool_call_limit::ToolCallLimitMiddleware;
 pub use tool_emulator::LLMToolEmulator;
 pub use tool_retry::ToolRetryMiddleware;
 pub use tool_selection::LLMToolSelectorMiddleware;
+pub use types::{
+    AgentMiddleware, AgentState, ExtendedModelResponse, HookConfig, JumpTo, ModelCallHandler,
+    ModelCallResult, ModelRequest, ModelResponse, ToolCallHandler, ToolCallRequest,
+    ToolCallWrapper, after_agent, after_model, before_agent, before_model, dynamic_prompt,
+    hook_config, wrap_model_call, wrap_tool_call,
+};

@@ -1,6 +1,8 @@
 pub mod agents;
 pub mod chat_models;
 
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 pub mod documents {
     pub use langchain_core::documents::*;
 }
