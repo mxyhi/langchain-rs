@@ -24,6 +24,7 @@ assert_eq!(model.base_url(), "https://api.groq.com/openai/v1");
 ## Public Surface
 
 - `ChatGroq`
+- `data::groq_profile()` for provider profile metadata
 - `chat_models::ChatGroq`
 - Groq default base URL handling
 
@@ -31,4 +32,3 @@ assert_eq!(model.base_url(), "https://api.groq.com/openai/v1");
 
 - `tests/chat_model.rs`
 - `tests/namespace.rs`
-

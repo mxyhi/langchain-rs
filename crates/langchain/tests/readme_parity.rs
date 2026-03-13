@@ -203,3 +203,46 @@ fn package_readmes_exist_and_include_core_sections() {
         }
     }
 }
+
+#[test]
+fn provider_readmes_document_public_data_namespaces_when_exposed() {
+    let expectations = [
+        (
+            "providers/langchain-anthropic/README.md",
+            "data::anthropic_profile()",
+        ),
+        (
+            "providers/langchain-deepseek/README.md",
+            "data::deepseek_profile()",
+        ),
+        (
+            "providers/langchain-fireworks/README.md",
+            "data::fireworks_profile()",
+        ),
+        ("providers/langchain-groq/README.md", "data::groq_profile()"),
+        (
+            "providers/langchain-mistralai/README.md",
+            "data::mistralai_profile()",
+        ),
+        (
+            "providers/langchain-ollama/README.md",
+            "data::ollama_profile()",
+        ),
+        (
+            "providers/langchain-openrouter/README.md",
+            "data::openrouter_profile()",
+        ),
+        ("providers/langchain-xai/README.md", "data::xai_profile()"),
+    ];
+
+    for (rel_path, required) in expectations {
+        let readme_path = workspace_root().join(rel_path);
+        let readme = read_file(&readme_path);
+        assert!(
+            readme.contains(required),
+            "{} should document its public data namespace via {:?}",
+            readme_path.display(),
+            required
+        );
+    }
+}

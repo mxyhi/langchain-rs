@@ -37,6 +37,7 @@ assert_eq!(embeddings.base_url(), "https://api.fireworks.ai/inference/v1");
 - `ChatFireworks`
 - `Fireworks`
 - `FireworksEmbeddings`
+- `data::fireworks_profile()` for provider profile metadata
 - `chat_models`, `llms`, `embeddings` namespaces
 
 ## Tests

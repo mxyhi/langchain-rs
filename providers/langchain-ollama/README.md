@@ -31,10 +31,10 @@ assert_eq!(embeddings.base_url(), "http://localhost:11434/v1");
 - `ChatOllama`
 - `OllamaLLM`
 - `OllamaEmbeddings`
+- `data::ollama_profile()` for provider profile metadata
 - `chat_models`, `llms`, `embeddings` namespaces
 
 ## Tests
 
 - `tests/provider.rs`
 - `tests/namespace.rs`
-

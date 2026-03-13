@@ -28,10 +28,10 @@ assert_eq!(embeddings.base_url(), "https://api.mistral.ai/v1");
 
 - `ChatMistralAI`
 - `MistralAIEmbeddings`
+- `data::mistralai_profile()` for provider profile metadata
 - `chat_models`, `embeddings` namespaces
 
 ## Tests
 
 - `tests/provider.rs`
 - `tests/namespace.rs`
-

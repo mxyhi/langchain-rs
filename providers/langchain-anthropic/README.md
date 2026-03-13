@@ -29,6 +29,7 @@ assert_eq!(llm.model_name(), "claude-3-7-sonnet-latest");
 - `ChatAnthropic`
 - `AnthropicLLM`
 - `AnthropicToolDefinition`, `convert_to_anthropic_tool`
+- `data::anthropic_profile()` for provider profile metadata
 - `chat_models`, `llms` namespaces
 
 ## Tests
@@ -36,4 +37,3 @@ assert_eq!(llm.model_name(), "claude-3-7-sonnet-latest");
 - `tests/chat_model.rs`
 - `tests/llms.rs`
 - `tests/namespace.rs`
-

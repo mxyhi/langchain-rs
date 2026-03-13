@@ -24,6 +24,7 @@ assert_eq!(model.base_url(), "https://api.x.ai/v1");
 ## Public Surface
 
 - `ChatXAI`
+- `data::xai_profile()` for provider profile metadata
 - `chat_models::ChatXAI`
 - xAI default base URL handling
 

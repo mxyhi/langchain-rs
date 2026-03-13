@@ -24,6 +24,7 @@ assert_eq!(model.base_url(), "https://api.deepseek.com/v1");
 ## Public Surface
 
 - `ChatDeepSeek`
+- `data::deepseek_profile()` for provider profile metadata
 - `chat_models::ChatDeepSeek`
 - DeepSeek-compatible default base URL routing
 
@@ -31,4 +32,3 @@ assert_eq!(model.base_url(), "https://api.deepseek.com/v1");
 
 - `tests/chat_model.rs`
 - `tests/namespace.rs`
-

@@ -24,6 +24,7 @@ assert_eq!(model.base_url(), "https://openrouter.ai/api/v1");
 ## Public Surface
 
 - `ChatOpenRouter`
+- `data::openrouter_profile()` for provider profile metadata
 - `chat_models::ChatOpenRouter`
 - OpenRouter default base URL handling
 
@@ -31,4 +32,3 @@ assert_eq!(model.base_url(), "https://openrouter.ai/api/v1");
 
 - `tests/chat_model.rs`
 - `tests/namespace.rs`
-
