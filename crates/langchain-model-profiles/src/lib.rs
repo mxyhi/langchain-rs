@@ -183,6 +183,7 @@ pub const PROVIDERS: &[ProviderProfile] = &[
             "HuggingFaceEmbeddings",
             "HuggingFaceEndpointEmbeddings",
             "HuggingFaceEndpoint",
+            "HuggingFacePipeline",
         ],
     },
     ProviderProfile {
@@ -269,6 +270,8 @@ pub const PROVIDERS: &[ProviderProfile] = &[
             "ExaSearchRetriever",
             "ExaSearchResults",
             "ExaFindSimilarResults",
+            "HighlightsContentsOptions",
+            "TextContentsOptions",
         ],
     },
 ];

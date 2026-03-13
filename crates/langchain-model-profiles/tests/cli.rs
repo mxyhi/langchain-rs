@@ -6,6 +6,7 @@ use std::sync::{LazyLock, Mutex};
 use langchain_model_profiles::cli::{
     describe_provider, render_capability_table, render_provider_detail, render_provider_table, run,
 };
+use langchain_model_profiles::provider;
 use serde_json::Value;
 use tempfile::TempDir;
 use wiremock::matchers::{method, path};
@@ -188,6 +189,25 @@ fn binary_unknown_provider_fails_with_stderr_message() {
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf8");
     assert!(stderr.contains("unknown provider"));
     assert!(stderr.contains("does-not-exist"));
+}
+
+#[test]
+fn provider_exports_match_huggingface_and_exa_public_surface() {
+    let huggingface = provider("huggingface").expect("huggingface profile should exist");
+    assert!(
+        huggingface.exports.contains(&"HuggingFacePipeline"),
+        "huggingface exports should keep HuggingFacePipeline in sync with provider surface"
+    );
+
+    let exa = provider("exa").expect("exa profile should exist");
+    assert!(
+        exa.exports.contains(&"HighlightsContentsOptions"),
+        "exa exports should keep HighlightsContentsOptions in sync with provider surface"
+    );
+    assert!(
+        exa.exports.contains(&"TextContentsOptions"),
+        "exa exports should keep TextContentsOptions in sync with provider surface"
+    );
 }
 
 #[test]
