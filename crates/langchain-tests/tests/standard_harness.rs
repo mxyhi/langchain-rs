@@ -291,3 +291,33 @@ async fn standard_harnesses_run_retriever_and_vectorstore_suites() {
         .run()
         .await;
 }
+
+#[tokio::test]
+async fn namespaced_modules_match_reference_layout() {
+    langchain_tests::unit_tests::chat_models::ChatModelUnitTests::new(ParrotChatHarness)
+        .run()
+        .await;
+    langchain_tests::unit_tests::embeddings::EmbeddingsUnitTests::new(EmbeddingsHarness)
+        .run()
+        .await;
+    langchain_tests::integration_tests::chat_models::ChatModelIntegrationTests::new(
+        ParrotChatHarness,
+    )
+    .run()
+    .await;
+    langchain_tests::integration_tests::embeddings::EmbeddingsIntegrationTests::new(
+        EmbeddingsHarness,
+    )
+    .run()
+    .await;
+    langchain_tests::integration_tests::retrievers::RetrieversIntegrationTests::new(
+        RetrieverHarness,
+    )
+    .run()
+    .await;
+    langchain_tests::integration_tests::vectorstores::VectorStoreIntegrationTests::new(
+        VectorStoreHarness,
+    )
+    .run()
+    .await;
+}

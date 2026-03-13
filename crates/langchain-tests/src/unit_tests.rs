@@ -1,3 +1,5 @@
+pub mod chat_models;
+pub mod embeddings;
 pub mod tools;
 
 use langchain_core::language_models::{BaseChatModel, BaseLLM};

@@ -26,9 +26,11 @@ pub use indexing::assert_indexing_result;
 pub use integration_tests::{
     AsyncCacheHarness, AsyncCacheTestSuite, BaseStoreAsyncHarness, BaseStoreAsyncTests,
     BaseStoreHarness, BaseStoreSyncTests, ChatModelIntegrationHarness, ChatModelIntegrationTests,
-    DocumentIndexHarness, DocumentIndexIntegrationTests, RetrieverIntegrationHarness,
-    RetrieverIntegrationTests, SyncCacheHarness, SyncCacheTestSuite, ToolIntegrationHarness,
-    ToolsIntegrationTests, VectorStoreIntegrationHarness, VectorStoreIntegrationTests,
+    DocumentIndexHarness, DocumentIndexIntegrationTests, EmbeddingsIntegrationHarness,
+    EmbeddingsIntegrationTests, RetrieverIntegrationHarness, RetrieverIntegrationTests,
+    RetrieversIntegrationHarness, RetrieversIntegrationTests, SyncCacheHarness, SyncCacheTestSuite,
+    ToolIntegrationHarness, ToolsIntegrationTests, VectorStoreIntegrationHarness,
+    VectorStoreIntegrationTests,
 };
 pub use llms::{assert_llm_generate_texts, assert_llm_invoke_response, assert_llm_token_usage};
 pub use retrievers::{RetrieverUnderTest, assert_retriever_returns_expected_document};

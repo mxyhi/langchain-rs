@@ -1,7 +1,11 @@
 pub mod base_store;
 pub mod cache;
+pub mod chat_models;
+pub mod embeddings;
 pub mod indexer;
+pub mod retrievers;
 pub mod tools;
+pub mod vectorstores;
 
 use langchain_core::documents::Document;
 use langchain_core::messages::BaseMessage;
@@ -158,5 +162,7 @@ pub use base_store::{
     BaseStoreAsyncHarness, BaseStoreAsyncTests, BaseStoreHarness, BaseStoreSyncTests,
 };
 pub use cache::{AsyncCacheHarness, AsyncCacheTestSuite, SyncCacheHarness, SyncCacheTestSuite};
+pub use embeddings::{EmbeddingsIntegrationHarness, EmbeddingsIntegrationTests};
 pub use indexer::{DocumentIndexHarness, DocumentIndexIntegrationTests};
+pub use retrievers::{RetrieversIntegrationHarness, RetrieversIntegrationTests};
 pub use tools::{ToolIntegrationHarness, ToolsIntegrationTests};
