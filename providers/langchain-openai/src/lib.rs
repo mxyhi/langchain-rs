@@ -2,8 +2,11 @@ pub mod azure;
 pub mod chat_models;
 mod client;
 pub mod compatible;
+pub mod data;
 pub mod embeddings;
 pub mod llms;
+pub mod middleware;
+pub mod output_parsers;
 pub mod tools;
 
 pub use azure::{AzureChatOpenAI, AzureOpenAI, AzureOpenAIEmbeddings};

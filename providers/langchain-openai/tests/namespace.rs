@@ -69,4 +69,17 @@ fn openai_namespaces_match_root_exports() {
     let namespaced_tool = langchain_openai::tools::custom_tool("code_exec", "Run code");
     assert_eq!(root_tool.name(), namespaced_tool.name());
     assert_eq!(root_tool.description(), namespaced_tool.description());
+
+    let profile = langchain_openai::data::openai_profile();
+    assert_eq!(profile.key, "openai");
+    assert_eq!(profile.package_name, "langchain-openai");
+    assert!(profile.capabilities.chat_model);
+
+    let parser = langchain_openai::output_parsers::JsonOutputToolsParser::new();
+    let root_parser = langchain_core::output_parsers::JsonOutputToolsParser::new();
+    let _ = (parser, root_parser);
+
+    let moderation_client =
+        langchain_openai::middleware::OpenAIModerationClient::new("https://api.test", None::<&str>);
+    assert_eq!(moderation_client.model(), "omni-moderation-latest");
 }

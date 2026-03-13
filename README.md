@@ -48,6 +48,23 @@ Current provider crates in this workspace:
 
 The mix is intentionally heterogeneous: some crates expose chat models and LLMs, some focus on embeddings, and others are vectorstore or retriever/tool integrations.
 
+## Reference Parity
+
+This workspace treats `.ref/langchain` as the canonical package inventory and keeps the Rust layout aligned at the package boundary level:
+
+- `libs/core` -> `crates/langchain-core`
+- `libs/langchain` -> `crates/langchain-classic`
+- `libs/langchain_v1` -> `crates/langchain`
+- `libs/model-profiles` -> `crates/langchain-model-profiles`
+- `libs/standard-tests` -> `crates/langchain-tests`
+- `libs/text-splitters` -> `crates/langchain-text-splitters`
+- `libs/partners/*` -> `providers/langchain-*`
+
+The contract is validated in two layers:
+
+- `cargo test --workspace`
+- `cargo test -p langchain --test reference_inventory_parity`
+
 ## Development
 
 - Run the full test matrix with `cargo test --workspace`.

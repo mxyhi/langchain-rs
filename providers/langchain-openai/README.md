@@ -32,6 +32,9 @@ assert_eq!(embeddings.model_name(), "text-embedding-3-small");
 - `AzureChatOpenAI`, `AzureOpenAI`, `AzureOpenAIEmbeddings`
 - `OpenAICompatibleChatModel`, `OpenAICompatibleEmbeddings`, `OpenAICompatibleLlm`
 - `custom_tool` and namespace modules `chat_models`, `embeddings`, `llms`, `compatible`, `azure`, `tools`
+- `data::openai_profile()` for provider profile metadata mirrored from `langchain-model-profiles`
+- `output_parsers::{JsonOutputToolsParser, JsonOutputKeyToolsParser, PydanticToolsParser}`
+- `middleware::OpenAIModerationClient` for the `/moderations` endpoint
 
 ## Tests
 
@@ -40,4 +43,4 @@ assert_eq!(embeddings.model_name(), "text-embedding-3-small");
 - `tests/llms.rs`
 - `tests/structured_output.rs`
 - `tests/namespace.rs`
-
+- `tests/moderation.rs`

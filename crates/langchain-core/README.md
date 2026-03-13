@@ -28,10 +28,11 @@ assert_eq!(message.content(), "hello");
 - `messages`, `prompt_values`, `prompts`, `language_models`, `embeddings`
 - `document_loaders`, `retrievers`, `vectorstores`, `stores`, `structured_query`
 - `callbacks`, `tracers`, `tools`, `load`, `chat_history`, `chat_sessions`
+- `utils::{env, strings, iter, aiter, usage, uuid, utils, _merge}` for shared helper parity with the reference package
 
 ## Tests
 
 - `tests/namespace_surface.rs`
 - `tests/messages_parity.rs`
 - `tests/tools_and_parsers.rs`
-
+- `tests/utils_extensions.rs`
