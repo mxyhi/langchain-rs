@@ -7,7 +7,7 @@ use langchain_classic::serpapi::SerpAPIWrapper;
 use langchain_classic::sql_database::SQLDatabase;
 use serde_json::json;
 use tempfile::tempdir;
-use wiremock::matchers::{method, path, query_param};
+use wiremock::matchers::{body_json, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 #[tokio::test]
@@ -104,18 +104,55 @@ fn sql_database_executes_queries_against_sqlite() {
     );
 }
 
-#[test]
-fn hub_surface_is_present_and_honestly_reports_missing_integration() {
+#[tokio::test]
+async fn hub_push_posts_prompt_manifest_and_returns_browser_url() {
+    let server = MockServer::start().await;
     let prompt = PromptTemplate::new("Hello {name}");
+    let options = hub::HubOptions::new().with_api_url(server.uri());
+
+    Mock::given(method("POST"))
+        .and(path("/repos/owner/prompt"))
+        .and(body_json(json!({
+            "manifest": {
+                "kind": "prompt_template",
+                "template": "Hello {name}"
+            }
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "url": "https://hub.example/prompts/owner/prompt/commit/abc123"
+        })))
+        .mount(&server)
+        .await;
+
+    let url = hub::push_with_options("owner/prompt", &prompt, &options)
+        .expect("hub push should succeed against mock server");
+    assert_eq!(
+        url,
+        "https://hub.example/prompts/owner/prompt/commit/abc123"
+    );
+}
+
+#[tokio::test]
+async fn hub_pull_fetches_prompt_template_from_http_manifest() {
+    let server = MockServer::start().await;
+    let options = hub::HubOptions::new().with_api_url(server.uri());
+
+    Mock::given(method("GET"))
+        .and(path("/repos/owner/prompt"))
+        .and(query_param("commit", "abc123"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "manifest": {
+                "kind": "prompt_template",
+                "template": "Hello {name}"
+            }
+        })))
+        .mount(&server)
+        .await;
+
+    let prompt = hub::pull_with_options("owner/prompt:abc123", &options)
+        .expect("hub pull should succeed against mock server");
     let rendered = prompt
         .format(&[("name".to_owned(), PromptArgument::String("Rust".to_owned()))].into())
-        .expect("prompt should render");
+        .expect("pulled prompt should render");
     assert_eq!(rendered, "Hello Rust");
-
-    let push_error =
-        hub::push("owner/prompt", &prompt).expect_err("hub push should be unsupported");
-    let pull_error = hub::pull("owner/prompt").expect_err("hub pull should be unsupported");
-
-    assert!(push_error.to_string().contains("not implemented"));
-    assert!(pull_error.to_string().contains("not implemented"));
 }
