@@ -1,6 +1,6 @@
-mod retrievers;
-mod tools;
-mod types;
+pub mod retrievers;
+pub mod tools;
+pub mod types;
 
 pub use retrievers::ExaSearchRetriever;
 pub use tools::{ExaFindSimilarResults, ExaSearchResults, SearchHit};

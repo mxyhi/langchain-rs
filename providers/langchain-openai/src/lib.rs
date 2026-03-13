@@ -1,10 +1,10 @@
-mod azure;
-mod chat_models;
+pub mod azure;
+pub mod chat_models;
 mod client;
-mod compatible;
-mod embeddings;
-mod llms;
-mod tools;
+pub mod compatible;
+pub mod embeddings;
+pub mod llms;
+pub mod tools;
 
 pub use azure::{AzureChatOpenAI, AzureOpenAI, AzureOpenAIEmbeddings};
 pub use chat_models::ChatOpenAI;

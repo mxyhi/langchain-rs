@@ -16,12 +16,12 @@
 
 | Phase | Status | Notes |
 | --- | --- | --- |
-| 1. 调研参考面与现状 | in_progress | 已确认包映射与 monorepo 边界 |
-| 2. 根目录设计/计划落盘 | in_progress | 本文件、findings、progress、design doc |
-| 3. 差异盘点与并行拆分 | pending | surface、tests、docs、providers |
-| 4. 先测后改 | pending | 缺口先转成 failing test 或缺文档检查 |
-| 5. 实现与文档补齐 | pending | 代码、README、示例 |
-| 6. 全量验证与提交 | pending | cargo test / fmt / git commit |
+| 1. 调研参考面与现状 | completed | 已确认包映射与 monorepo 边界 |
+| 2. 根目录设计/计划落盘 | completed | 已提交 design baseline commit |
+| 3. 差异盘点与并行拆分 | completed | surface、tests、docs、providers 已完成盘点 |
+| 4. 先测后改 | completed | README parity、namespace parity、model-profiles refresh、langchain-tests harness 均按测试驱动收口 |
+| 5. 实现与文档补齐 | completed | README、provider namespace、CLI refresh、standard harness 已补齐 |
+| 6. 全量验证与提交 | in_progress | `cargo fmt --all` 与 `cargo test --workspace --quiet` 已通过，准备最终 commit |
 
 ## Success Criteria
 

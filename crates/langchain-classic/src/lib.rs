@@ -2,8 +2,9 @@
 //!
 //! This crate mirrors the role of Python `langchain_classic`: it is the landing
 //! zone for APIs that belong to the legacy/classic package rather than the new
-//! facade crates. The implementation is intentionally minimal for now, but the
-//! package boundary is real and ready to absorb classic-only modules later.
+//! facade crates. The package boundary is intentionally explicit so legacy
+//! chains, memory primitives, utilities, and aliases can stay separate from
+//! the v1 facade while still sharing the same core abstractions.
 
 pub mod base_language;
 pub mod base_memory;

@@ -22,3 +22,29 @@
   - provider 不再一律按聊天模型描述，而是按能力类型区分 `chat/llm/embeddings/vectorstore/retriever/tooling`。
   - 设计中单列 `langchain-text-splitters`、`langchain-model-profiles`、`langchain-tests` 的顶级职责。
   - 文档验证机制明确为 “README 断言 + doc comment / integration tests 可编译示例”。
+
+### Implementation summary
+
+- 已完成根 README 和全部公开 crate/provider README，新增 `crates/langchain/tests/readme_parity.rs` 并先跑红后转绿。
+- 已收口 provider namespace parity：
+  - `langchain-anthropic` 公开 `chat_models` / `llms`
+  - `langchain-openai` 公开 `azure` / `chat_models` / `compatible` / `embeddings` / `llms` / `tools`
+  - `langchain-exa` 公开 `retrievers` / `tools` / `types`
+  - `langchain-perplexity` 补齐 `tests/namespace.rs`
+- 已收口 `langchain-tests` harness：新增 `unit_tests.rs`、`integration_tests.rs`、`tests/standard_harness.rs`
+- 已收口 `langchain-model-profiles refresh`：支持 `--provider` / `--data-dir` / `--catalog`，输出 `_profiles.json`
+- 过程中遇到两次 `langchain-model-profiles` 局部编译问题：
+  - `BTreeMap` 类型推断瞬态报错，后续确认代码已显式标注并通过单包测试
+  - `reqwest::blocking` feature 不可用，最终改回 `tokio` runtime + `reqwest::get` 方案
+
+### Verification
+
+- `cargo test -p langchain --test readme_parity --quiet`
+- `cargo test -p langchain-tests --quiet`
+- `cargo test -p langchain-model-profiles --quiet`
+- `cargo test -p langchain-anthropic --quiet`
+- `cargo test -p langchain-openai --quiet`
+- `cargo test -p langchain-exa --quiet`
+- `cargo test -p langchain-perplexity --quiet`
+- `cargo fmt --all`
+- `cargo test --workspace --quiet`

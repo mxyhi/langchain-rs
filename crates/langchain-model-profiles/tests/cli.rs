@@ -1,13 +1,55 @@
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use langchain_model_profiles::cli::{
-    describe_provider, render_capability_table, render_provider_detail, render_provider_table,
+    describe_provider, render_capability_table, render_provider_detail, render_provider_table, run,
 };
+use serde_json::Value;
+use tempfile::TempDir;
 
 fn langchain_profiles() -> Command {
     let path =
         std::env::var("CARGO_BIN_EXE_langchain-profiles").expect("binary path should be set");
     Command::new(path)
+}
+
+fn fixture_path(name: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join(name)
+}
+
+fn temp_data_dir() -> (TempDir, PathBuf) {
+    let tempdir = tempfile::tempdir().expect("temp dir should be created");
+    let data_dir = tempdir.path().join("data");
+    (tempdir, data_dir)
+}
+
+fn write_augmentations(data_dir: &Path) {
+    fs::create_dir_all(data_dir).expect("data dir should be created");
+    fs::write(
+        data_dir.join("profile_augmentations.toml"),
+        r#"
+[overrides]
+image_url_inputs = true
+pdf_inputs = true
+
+[overrides."claude-3-opus"]
+max_output_tokens = 8192
+
+[overrides."custom-offline-model"]
+structured_output = true
+max_input_tokens = 123
+"#,
+    )
+    .expect("augmentations should be written");
+}
+
+fn read_profiles_json(data_dir: &Path) -> Value {
+    let bytes = fs::read(data_dir.join("_profiles.json")).expect("profiles output should exist");
+    serde_json::from_slice(&bytes).expect("profiles output should be valid json")
 }
 
 #[test]
@@ -103,5 +145,103 @@ fn binary_unknown_provider_fails_with_stderr_message() {
 
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf8");
     assert!(stderr.contains("unknown provider"));
+    assert!(stderr.contains("does-not-exist"));
+}
+
+#[test]
+fn cli_run_refresh_generates_profiles_json_from_catalog_fixture() {
+    let (_tempdir, data_dir) = temp_data_dir();
+    write_augmentations(&data_dir);
+
+    let output = run([
+        "refresh",
+        "--provider",
+        "anthropic",
+        "--data-dir",
+        data_dir.to_str().expect("temp path should be utf8"),
+        "--catalog",
+        fixture_path("models-dev-sample.json")
+            .to_str()
+            .expect("fixture path should be utf8"),
+    ])
+    .expect("refresh run should succeed");
+
+    assert!(output.contains("provider: anthropic"));
+    assert!(output.contains("_profiles.json"));
+
+    let generated = read_profiles_json(&data_dir);
+    assert_eq!(generated["provider"], "anthropic");
+    assert_eq!(generated["package_name"], "langchain-anthropic");
+    assert_eq!(generated["default_base_url"], "https://api.anthropic.com");
+    assert_eq!(
+        generated["models"]["claude-3-opus"]["max_output_tokens"],
+        8192
+    );
+    assert_eq!(
+        generated["models"]["claude-3-opus"]["image_url_inputs"],
+        true
+    );
+    assert_eq!(generated["models"]["claude-3-opus"]["pdf_inputs"], true);
+    assert_eq!(
+        generated["models"]["custom-offline-model"]["max_input_tokens"],
+        123
+    );
+    assert_eq!(
+        generated["models"]["custom-offline-model"]["structured_output"],
+        true
+    );
+}
+
+#[test]
+fn binary_refresh_subcommand_writes_profiles_json() {
+    let (_tempdir, data_dir) = temp_data_dir();
+    write_augmentations(&data_dir);
+
+    let output = langchain_profiles()
+        .args([
+            "refresh",
+            "--provider",
+            "anthropic",
+            "--data-dir",
+            data_dir.to_str().expect("temp path should be utf8"),
+            "--catalog",
+            fixture_path("models-dev-sample.json")
+                .to_str()
+                .expect("fixture path should be utf8"),
+        ])
+        .output()
+        .expect("refresh subcommand should run");
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf8");
+    assert!(stdout.contains("provider: anthropic"));
+    assert!(stdout.contains("models: 3"));
+    assert!(data_dir.join("_profiles.json").exists());
+}
+
+#[test]
+fn binary_refresh_subcommand_fails_for_unknown_provider() {
+    let (_tempdir, data_dir) = temp_data_dir();
+
+    let output = langchain_profiles()
+        .args([
+            "refresh",
+            "--provider",
+            "does-not-exist",
+            "--data-dir",
+            data_dir.to_str().expect("temp path should be utf8"),
+            "--catalog",
+            fixture_path("models-dev-sample.json")
+                .to_str()
+                .expect("fixture path should be utf8"),
+        ])
+        .output()
+        .expect("refresh subcommand should run");
+
+    assert!(!output.status.success());
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf8");
+    assert!(stderr.contains("provider not found"));
     assert!(stderr.contains("does-not-exist"));
 }

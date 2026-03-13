@@ -18,3 +18,11 @@
 
 - 仓库根目录暂无 `docs/`，公开 crate/provider 目录下也未发现 README。
 - 需要补齐根 README 与 crate README，至少说明职责、安装方式、快速示例、与参考仓映射关系。
+
+### Implemented closure
+
+- README parity 已补齐：根 README + 6 个 crate README + 15 个 provider README 全部落地，并通过新增的 `crates/langchain/tests/readme_parity.rs` 自动校验。
+- `langchain-model-profiles` 不再只是静态展示 CLI，现已支持 `refresh --provider --data-dir [--catalog]`，可从 `models.dev` catalog 或本地 fixture 生成 `_profiles.json`。
+- `langchain-tests` 从单个 assert helper 提升为可复用 harness：新增 unit/integration test runners，保留原 helper 作为底层断言。
+- provider namespace parity 已补齐最小闭包：`langchain-anthropic`、`langchain-openai`、`langchain-exa` 新增公开 namespace；`langchain-perplexity` 补齐 namespace parity tests。
+- `langchain-classic` 顶层注释已去掉“intentionally minimal for now”这一与当前目标不一致的表述。
