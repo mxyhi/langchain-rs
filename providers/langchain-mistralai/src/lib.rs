@@ -15,6 +15,8 @@ use serde_json::Value;
 
 const DEFAULT_BASE_URL: &str = "https://api.mistral.ai/v1";
 
+pub mod data;
+
 #[derive(Debug, Clone)]
 pub struct ChatMistralAI {
     inner: OpenAICompatibleChatModel,

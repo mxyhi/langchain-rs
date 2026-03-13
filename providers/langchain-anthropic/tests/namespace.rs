@@ -38,4 +38,9 @@ fn anthropic_namespaces_match_root_exports() {
         serde_json::to_value(root_tool).expect("root tool should serialize"),
         serde_json::to_value(namespaced_tool).expect("namespaced tool should serialize")
     );
+
+    let profile = langchain_anthropic::data::anthropic_profile();
+    assert_eq!(profile.key, "anthropic");
+    assert_eq!(profile.package_name, "langchain-anthropic");
+    assert!(profile.capabilities.chat_model);
 }

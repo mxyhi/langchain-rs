@@ -652,6 +652,7 @@ version = "0.1.0"
 dependencies = [
  "futures-util",
  "langchain-core",
+ "langchain-model-profiles",
  "reqwest",
  "secrecy",
  "serde",
@@ -683,6 +684,7 @@ dependencies = [
  "langchain-text-splitters",
  "reqwest",
  "rusqlite",
+ "serde",
  "serde_json",
  "tempfile",
  "tokio",
@@ -709,6 +711,7 @@ version = "0.1.0"
 dependencies = [
  "futures-util",
  "langchain-core",
+ "langchain-model-profiles",
  "langchain-openai",
  "serde_json",
  "tokio",
@@ -732,9 +735,11 @@ version = "0.1.0"
 dependencies = [
  "futures-util",
  "langchain-core",
+ "langchain-model-profiles",
  "langchain-openai",
  "serde_json",
  "tokio",
+ "wiremock",
 ]
 
 [[package]]
@@ -743,9 +748,11 @@ version = "0.1.0"
 dependencies = [
  "futures-util",
  "langchain-core",
+ "langchain-model-profiles",
  "langchain-openai",
  "serde_json",
  "tokio",
+ "wiremock",
 ]
 
 [[package]]
@@ -767,6 +774,7 @@ version = "0.1.0"
 dependencies = [
  "futures-util",
  "langchain-core",
+ "langchain-model-profiles",
  "langchain-openai",
  "serde_json",
  "tokio",
@@ -780,6 +788,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
+ "wiremock",
 ]
 
 [[package]]
@@ -801,6 +810,7 @@ version = "0.1.0"
 dependencies = [
  "futures-util",
  "langchain-core",
+ "langchain-model-profiles",
  "langchain-openai",
  "serde_json",
  "wiremock",
@@ -828,6 +838,7 @@ version = "0.1.0"
 dependencies = [
  "futures-util",
  "langchain-core",
+ "langchain-model-profiles",
  "langchain-openai",
  "serde_json",
  "tokio",
@@ -884,6 +895,7 @@ version = "0.1.0"
 dependencies = [
  "futures-util",
  "langchain-core",
+ "langchain-model-profiles",
  "langchain-openai",
  "serde_json",
  "tokio",

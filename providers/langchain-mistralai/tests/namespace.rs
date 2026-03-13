@@ -10,4 +10,9 @@ fn mistralai_namespaces_match_root_exports() {
     let embeddings =
         langchain_mistralai::embeddings::MistralAIEmbeddings::new("mistral-embed", None::<&str>);
     assert_eq!(embeddings.base_url(), "https://api.mistral.ai/v1");
+
+    let profile = langchain_mistralai::data::mistralai_profile();
+    assert_eq!(profile.key, "mistralai");
+    assert_eq!(profile.package_name, "langchain-mistralai");
+    assert!(profile.capabilities.embeddings);
 }

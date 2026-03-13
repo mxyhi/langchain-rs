@@ -18,6 +18,8 @@ use serde_json::Value;
 
 const DEFAULT_BASE_URL: &str = "http://localhost:11434/v1";
 
+pub mod data;
+
 #[derive(Debug, Clone)]
 pub struct ChatOllama {
     inner: OpenAICompatibleChatModel,

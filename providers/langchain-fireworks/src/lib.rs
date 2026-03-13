@@ -18,6 +18,8 @@ use serde_json::Value;
 
 const DEFAULT_BASE_URL: &str = "https://api.fireworks.ai/inference/v1";
 
+pub mod data;
+
 #[derive(Debug, Clone)]
 pub struct ChatFireworks {
     inner: OpenAICompatibleChatModel,

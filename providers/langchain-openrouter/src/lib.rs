@@ -14,6 +14,8 @@ use serde_json::Value;
 
 const DEFAULT_BASE_URL: &str = "https://openrouter.ai/api/v1";
 
+pub mod data;
+
 #[derive(Debug, Clone)]
 pub struct ChatOpenRouter {
     inner: OpenAICompatibleChatModel,

@@ -15,4 +15,9 @@ fn ollama_namespaces_match_root_exports() {
         namespaced_embeddings.base_url(),
         "http://localhost:11434/v1"
     );
+
+    let profile = langchain_ollama::data::ollama_profile();
+    assert_eq!(profile.key, "ollama");
+    assert_eq!(profile.package_name, "langchain-ollama");
+    assert!(profile.capabilities.embeddings);
 }

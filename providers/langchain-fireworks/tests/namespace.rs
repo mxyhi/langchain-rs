@@ -29,4 +29,9 @@ fn fireworks_namespaces_match_root_exports() {
         namespaced_embeddings.base_url(),
         "https://api.fireworks.ai/inference/v1"
     );
+
+    let profile = langchain_fireworks::data::fireworks_profile();
+    assert_eq!(profile.key, "fireworks");
+    assert_eq!(profile.package_name, "langchain-fireworks");
+    assert!(profile.capabilities.llm);
 }
