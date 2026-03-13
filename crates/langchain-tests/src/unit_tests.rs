@@ -1,3 +1,5 @@
+pub mod tools;
+
 use langchain_core::language_models::{BaseChatModel, BaseLLM};
 use langchain_core::messages::BaseMessage;
 use langchain_core::runnables::RunnableConfig;
@@ -52,6 +54,8 @@ where
         }
     }
 }
+
+pub use tools::{ToolUnitHarness, ToolsUnitTests};
 
 pub trait EmbeddingsUnitHarness {
     type Embeddings: EmbeddingsUnderTest;

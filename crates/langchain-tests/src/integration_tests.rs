@@ -1,3 +1,8 @@
+pub mod base_store;
+pub mod cache;
+pub mod indexer;
+pub mod tools;
+
 use langchain_core::documents::Document;
 use langchain_core::messages::BaseMessage;
 
@@ -148,3 +153,10 @@ where
         .await;
     }
 }
+
+pub use base_store::{
+    BaseStoreAsyncHarness, BaseStoreAsyncTests, BaseStoreHarness, BaseStoreSyncTests,
+};
+pub use cache::{AsyncCacheHarness, AsyncCacheTestSuite, SyncCacheHarness, SyncCacheTestSuite};
+pub use indexer::{DocumentIndexHarness, DocumentIndexIntegrationTests};
+pub use tools::{ToolIntegrationHarness, ToolsIntegrationTests};

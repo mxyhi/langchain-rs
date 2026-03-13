@@ -2,16 +2,24 @@ use std::collections::BTreeMap;
 
 use futures_util::future::BoxFuture;
 use langchain_core::LangChainError;
+use langchain_core::caches::{CacheValue, InMemoryCache};
 use langchain_core::documents::Document;
+use langchain_core::indexing::{InMemoryRecordManager, IndexingResult, RecordManager};
 use langchain_core::language_models::{BaseChatModel, ParrotChatModel, ParrotLLM};
-use langchain_core::messages::{BaseMessage, HumanMessage};
+use langchain_core::messages::{BaseMessage, HumanMessage, ToolCall};
+use langchain_core::outputs::Generation;
 use langchain_core::runnables::RunnableConfig;
+use langchain_core::stores::InMemoryStore;
+use langchain_core::tools::{StructuredTool, Tool, tool};
+use langchain_core::vectorstores::VectorStore;
 use langchain_tests::{
-    EmbeddingsUnderTest, SimilaritySearchResult, VectorStoreUnderTest, assert_chat_model_batch,
-    assert_chat_model_response, assert_document_embeddings_count, assert_embedding_dimension,
-    assert_get_by_ids_behavior, assert_llm_generate_texts, assert_llm_invoke_response,
+    EmbeddingsUnderTest, SimilaritySearchResult, VectorStoreUnderTest, assert_cache_clear,
+    assert_cache_round_trip, assert_chat_model_batch, assert_chat_model_response,
+    assert_document_embeddings_count, assert_embedding_dimension, assert_get_by_ids_behavior,
+    assert_indexing_result, assert_llm_generate_texts, assert_llm_invoke_response,
     assert_llm_token_usage, assert_query_and_documents_share_dimension,
-    assert_similarity_search_finds_expected_document, assert_usage_tokens,
+    assert_similarity_search_finds_expected_document, assert_store_round_trip,
+    assert_structured_tool, assert_tool_round_trip, assert_usage_tokens,
 };
 
 struct FakeEmbeddings;
@@ -140,6 +148,49 @@ impl VectorStoreUnderTest for WithoutGetByIdsVectorStore {
     }
 }
 
+#[derive(Default)]
+struct FakeIndexVectorStore {
+    documents: BTreeMap<String, Document>,
+}
+
+impl VectorStore for FakeIndexVectorStore {
+    fn add_documents<'a>(
+        &'a mut self,
+        documents: Vec<Document>,
+    ) -> BoxFuture<'a, Result<Vec<String>, LangChainError>> {
+        Box::pin(async move {
+            let ids = documents
+                .into_iter()
+                .map(|document| {
+                    let id = document
+                        .id
+                        .clone()
+                        .expect("indexing documents should carry ids");
+                    self.documents.insert(id.clone(), document);
+                    id
+                })
+                .collect::<Vec<_>>();
+            Ok(ids)
+        })
+    }
+
+    fn similarity_search<'a>(
+        &'a self,
+        _query: &'a str,
+        _limit: usize,
+    ) -> BoxFuture<'a, Result<Vec<Document>, LangChainError>> {
+        Box::pin(async move { Ok(Vec::new()) })
+    }
+
+    fn delete(&mut self, ids: &[String]) -> Result<bool, LangChainError> {
+        let before = self.documents.len();
+        for id in ids {
+            self.documents.remove(id);
+        }
+        Ok(before != self.documents.len())
+    }
+}
+
 #[tokio::test]
 async fn chat_model_helpers_validate_response_and_batch() {
     let model = ParrotChatModel::new("parrot-1", 5);
@@ -232,4 +283,72 @@ async fn vector_store_helpers_cover_similarity_and_get_by_ids() {
         false,
     )
     .await;
+}
+
+#[tokio::test]
+async fn cache_store_tool_and_index_helpers_cover_reference_extensions() {
+    let cache = InMemoryCache::new();
+    let cached_value: CacheValue = vec![Generation::new("cached").into()];
+    assert_cache_round_trip(&cache, "prompt", "llm", cached_value.clone()).await;
+    assert_cache_clear(&cache, "prompt", "llm", cached_value).await;
+
+    let store = InMemoryStore::<serde_json::Value>::new();
+    assert_store_round_trip(
+        &store,
+        vec![
+            ("alpha".to_owned(), serde_json::json!({"value": "A"})),
+            ("beta".to_owned(), serde_json::json!({"value": "B"})),
+        ],
+        vec!["alpha".to_owned(), "beta".to_owned()],
+        Some("a"),
+    )
+    .await;
+
+    let echo_tool = Tool::new(tool("echo", "Echoes string input"), |input| {
+        Box::pin(async move { Ok(format!("echo:{input}")) })
+    });
+    assert_tool_round_trip(
+        &echo_tool,
+        ToolCall::new("echo", serde_json::json!({"input": "rust"})).with_id("call-1"),
+        "echo",
+        "echo:rust",
+    )
+    .await;
+
+    let structured_tool = StructuredTool::new(
+        tool("shape", "Returns structured output").with_parameters(
+            serde_json::json!({"type": "object", "properties": {"value": {"type": "number"}}}),
+        ),
+        |input| Box::pin(async move { Ok(serde_json::json!({"wrapped": input["value"]})) }),
+    );
+    assert_structured_tool(
+        &structured_tool,
+        ToolCall::new("shape", serde_json::json!({"value": 7})).with_id("call-2"),
+        "shape",
+        serde_json::json!({"wrapped": 7}),
+    )
+    .await;
+
+    let mut record_manager = InMemoryRecordManager::new("tests");
+    record_manager
+        .create_schema()
+        .expect("record manager schema should initialize");
+    let mut vector_store = FakeIndexVectorStore::default();
+    let result = assert_indexing_result(
+        &mut vector_store,
+        &mut record_manager,
+        vec![Document {
+            page_content: "hello world".to_owned(),
+            metadata: BTreeMap::new(),
+            id: Some("doc-1".to_owned()),
+        }],
+        false,
+        IndexingResult {
+            num_added: 1,
+            num_skipped: 0,
+            num_deleted: 0,
+        },
+    )
+    .await;
+    assert_eq!(result.num_added, 1);
 }
