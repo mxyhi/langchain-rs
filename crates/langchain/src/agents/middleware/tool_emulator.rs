@@ -1,9 +1,10 @@
 use serde_json::{Value, json};
 
+use futures_util::future::BoxFuture;
 use langchain_core::LangChainError;
 use langchain_core::messages::ToolMessage;
 
-use super::types::{AgentMiddleware, ToolCallRequest};
+use super::types::{AgentMiddleware, ToolCallHandler, ToolCallRequest};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct EmulatedToolResult {
@@ -66,4 +67,17 @@ impl LLMToolEmulator {
     }
 }
 
-impl AgentMiddleware for LLMToolEmulator {}
+impl AgentMiddleware for LLMToolEmulator {
+    fn wrap_tool_call(
+        &self,
+        request: ToolCallRequest,
+        handler: ToolCallHandler,
+    ) -> BoxFuture<'static, Result<ToolMessage, LangChainError>> {
+        if request.tool().is_some() {
+            return handler(request);
+        }
+
+        let emulator = self.clone();
+        Box::pin(async move { emulator.emulate(&request) })
+    }
+}

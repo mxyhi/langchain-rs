@@ -2,9 +2,12 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use futures_util::future::BoxFuture;
 use langchain_core::LangChainError;
+use langchain_core::messages::{ToolMessage, ToolMessageStatus};
+use serde_json::{Value, json};
 
-use super::types::AgentMiddleware;
+use super::types::{AgentMiddleware, ToolCallHandler, ToolCallRequest};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ShellCommandOutput {
@@ -174,7 +177,78 @@ impl ShellToolMiddleware {
     }
 }
 
-impl AgentMiddleware for ShellToolMiddleware {}
+impl AgentMiddleware for ShellToolMiddleware {
+    fn wrap_tool_call(
+        &self,
+        request: ToolCallRequest,
+        handler: ToolCallHandler,
+    ) -> BoxFuture<'static, Result<ToolMessage, LangChainError>> {
+        if !matches!(request.tool_call().name(), "shell" | "bash") {
+            return handler(request);
+        }
+
+        let middleware = self.clone();
+        Box::pin(async move {
+            let command = extract_shell_command(request.tool_call().args())?;
+            let output = middleware.execute(command)?;
+            let content = render_shell_output(&output);
+            let status = if output.success() {
+                ToolMessageStatus::Success
+            } else {
+                ToolMessageStatus::Error
+            };
+            Ok(ToolMessage::with_parts(
+                content,
+                request.tool_call().id().unwrap_or_default(),
+                Some(request.tool_call().name()),
+                Some(json!({
+                    "status_code": output.status_code(),
+                    "stdout": output.stdout(),
+                    "stderr": output.stderr(),
+                })),
+                status,
+            ))
+        })
+    }
+}
+
+fn extract_shell_command(args: &Value) -> Result<&str, LangChainError> {
+    match args {
+        Value::String(command) if !command.trim().is_empty() => Ok(command),
+        Value::Object(map) => {
+            if map.get("restart").and_then(Value::as_bool) == Some(true) {
+                return Err(LangChainError::unsupported(
+                    "shell session restart is not supported by this Rust middleware yet",
+                ));
+            }
+
+            ["command", "input"]
+                .iter()
+                .find_map(|key| map.get(*key).and_then(Value::as_str))
+                .filter(|command| !command.trim().is_empty())
+                .ok_or_else(|| {
+                    LangChainError::request(
+                        "shell tool call requires a non-empty `command` or `input` string",
+                    )
+                })
+        }
+        _ => Err(LangChainError::request(
+            "shell tool call requires string arguments",
+        )),
+    }
+}
+
+fn render_shell_output(output: &ShellCommandOutput) -> String {
+    if !output.stdout().trim().is_empty() {
+        return output.stdout().to_owned();
+    }
+
+    if !output.stderr().trim().is_empty() {
+        return output.stderr().to_owned();
+    }
+
+    format!("command exited with status {}", output.status_code())
+}
 
 fn looks_mutating(command_line: &str) -> bool {
     let lowered = command_line.to_ascii_lowercase();

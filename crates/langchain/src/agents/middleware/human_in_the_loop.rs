@@ -1,6 +1,9 @@
 use std::collections::BTreeSet;
 
-use super::types::AgentMiddleware;
+use futures_util::future::BoxFuture;
+use langchain_core::LangChainError;
+
+use super::types::{AgentMiddleware, ToolCallHandler, ToolCallRequest};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InterruptOnConfig {
@@ -87,4 +90,28 @@ impl HumanInTheLoopMiddleware {
     }
 }
 
-impl AgentMiddleware for HumanInTheLoopMiddleware {}
+impl AgentMiddleware for HumanInTheLoopMiddleware {
+    fn wrap_tool_call(
+        &self,
+        request: ToolCallRequest,
+        handler: ToolCallHandler,
+    ) -> BoxFuture<'static, Result<langchain_core::messages::ToolMessage, LangChainError>> {
+        if let Some(interrupt) = self.build_interrupt_request(
+            request.tool_call().name(),
+            format!(
+                "tool `{}` requires explicit human approval before execution",
+                request.tool_call().name()
+            ),
+        ) {
+            return Box::pin(async move {
+                Err(LangChainError::request(format!(
+                    "human approval required for tool '{}': {}",
+                    interrupt.tool_name(),
+                    interrupt.reason()
+                )))
+            });
+        }
+
+        handler(request)
+    }
+}

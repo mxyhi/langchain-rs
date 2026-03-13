@@ -1,21 +1,26 @@
+use std::fs;
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
 };
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use futures_util::future::BoxFuture;
 use langchain::agents::create_agent;
 use langchain::agents::middleware::{
-    ClearToolUsesEdit, CodexSandboxExecutionPolicy, ContextEditingMiddleware,
+    AgentMiddleware, ClearToolUsesEdit, CodexSandboxExecutionPolicy, ContextEditingMiddleware,
     FilesystemFileSearchMiddleware, HumanInTheLoopMiddleware, InterruptOnConfig, LLMToolEmulator,
     LLMToolSelectorMiddleware, ModelCallLimitMiddleware, ModelFallbackMiddleware,
     ModelRetryMiddleware, PIIDetectionError, PIIMiddleware, RedactionRule, ShellToolMiddleware,
-    SummarizationMiddleware, TodoListMiddleware, ToolCallLimitMiddleware, ToolRetryMiddleware,
+    SummarizationMiddleware, TodoListMiddleware, ToolCallHandler, ToolCallLimitMiddleware,
+    ToolCallRequest, ToolRetryMiddleware,
 };
 use langchain::language_models::{BaseChatModel, ToolBindingOptions};
-use langchain::messages::{AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolCall};
+use langchain::messages::{
+    AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolCall, ToolMessage,
+};
 use langchain::runnables::{Runnable, RunnableConfig};
-use langchain::tools::{ToolDefinition, tool};
+use langchain::tools::{ToolDefinition, ToolRuntime, tool};
 use serde_json::json;
 
 #[test]
@@ -176,6 +181,190 @@ async fn summarization_and_todo_middlewares_persist_state_metadata() {
 fn pii_blocking_rule_raises_detection_error() {
     let error = PIIDetectionError::new("email", "secret@example.com");
     assert!(error.to_string().contains("PII"));
+}
+
+#[tokio::test]
+async fn tool_call_limit_blocks_tool_execution_after_limit_is_reached() {
+    let middleware = ToolCallLimitMiddleware::new(Some("search"), Some(1), None);
+    let handler_calls = Arc::new(AtomicUsize::new(0));
+    let handler = successful_tool_handler(handler_calls.clone(), "tool ok");
+
+    middleware
+        .wrap_tool_call(
+            tool_call_request("search", json!({"query": "first"})),
+            handler.clone(),
+        )
+        .await
+        .expect("first tool call should pass through");
+
+    let error = middleware
+        .wrap_tool_call(
+            tool_call_request("search", json!({"query": "second"})),
+            handler,
+        )
+        .await
+        .expect_err("second tool call should be blocked by the middleware");
+
+    assert_eq!(handler_calls.load(Ordering::SeqCst), 1);
+    assert!(
+        error
+            .to_string()
+            .to_ascii_lowercase()
+            .contains("tool call limit")
+    );
+}
+
+#[tokio::test]
+async fn human_in_the_loop_interrupts_matching_tool_calls() {
+    let middleware = HumanInTheLoopMiddleware::new(InterruptOnConfig::only(["deploy"]));
+    let handler_calls = Arc::new(AtomicUsize::new(0));
+    let handler = successful_tool_handler(handler_calls.clone(), "should not run");
+
+    let error = middleware
+        .wrap_tool_call(
+            tool_call_request("deploy", json!({"target": "prod"})),
+            handler,
+        )
+        .await
+        .expect_err("configured tool should require human approval");
+
+    assert_eq!(handler_calls.load(Ordering::SeqCst), 0);
+    assert!(error.to_string().contains("human approval required"));
+    assert!(error.to_string().contains("deploy"));
+}
+
+#[tokio::test]
+async fn tool_emulator_generates_tool_messages_when_no_tool_is_bound() {
+    let middleware = LLMToolEmulator::new();
+    let handler_calls = Arc::new(AtomicUsize::new(0));
+    let handler = failing_tool_handler(handler_calls.clone(), "handler should not execute");
+
+    let message = middleware
+        .wrap_tool_call(
+            tool_call_request("search", json!({"query": "weather"})),
+            handler,
+        )
+        .await
+        .expect("emulator should synthesize a tool message");
+
+    assert_eq!(handler_calls.load(Ordering::SeqCst), 0);
+    assert!(message.content().contains("Emulated tool `search`"));
+    assert_eq!(message.name(), Some("search"));
+    assert_eq!(
+        message
+            .artifact()
+            .and_then(|value| value.get("emulated"))
+            .and_then(|value| value.as_bool()),
+        Some(true)
+    );
+}
+
+#[tokio::test]
+async fn filesystem_file_search_handles_file_search_tool_calls() {
+    let root = create_temp_dir("middleware-file-search");
+    fs::write(root.join("notes.txt"), "alpha needle\nbeta line\n")
+        .expect("fixture file should be written");
+    let middleware = FilesystemFileSearchMiddleware::new(&root);
+    let handler_calls = Arc::new(AtomicUsize::new(0));
+    let handler = failing_tool_handler(handler_calls.clone(), "handler should not execute");
+
+    let message = middleware
+        .wrap_tool_call(
+            tool_call_request("file_search", json!({"query": "needle"})),
+            handler,
+        )
+        .await
+        .expect("file search middleware should answer the tool call");
+
+    assert_eq!(handler_calls.load(Ordering::SeqCst), 0);
+    assert!(message.content().contains("notes.txt:1:alpha needle"));
+    assert_eq!(
+        message
+            .artifact()
+            .and_then(|value| value.as_array())
+            .map(Vec::len),
+        Some(1)
+    );
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[tokio::test]
+async fn shell_tool_executes_shell_tool_calls_with_policy_guardrails() {
+    let middleware =
+        ShellToolMiddleware::new(CodexSandboxExecutionPolicy::default().with_shell("/bin/sh"));
+    let handler_calls = Arc::new(AtomicUsize::new(0));
+    let handler = failing_tool_handler(handler_calls.clone(), "handler should not execute");
+
+    let message = middleware
+        .wrap_tool_call(
+            tool_call_request("shell", json!({"command": "printf 'ready\\n'"})),
+            handler,
+        )
+        .await
+        .expect("shell middleware should execute safe shell commands");
+
+    assert_eq!(handler_calls.load(Ordering::SeqCst), 0);
+    assert!(message.content().contains("ready"));
+    assert_eq!(
+        message
+            .artifact()
+            .and_then(|value| value.get("status_code"))
+            .and_then(|value| value.as_i64()),
+        Some(0)
+    );
+}
+
+fn tool_call_request(name: &str, args: serde_json::Value) -> ToolCallRequest {
+    let tool_call_id = format!("{name}-call");
+    let tool_call = ToolCall::new(name, args).with_id(tool_call_id.clone());
+    ToolCallRequest::new(
+        tool_call,
+        json!({}),
+        ToolRuntime::new(json!({}), json!({})).with_tool_call_id(tool_call_id),
+    )
+}
+
+fn successful_tool_handler(
+    call_counter: Arc<AtomicUsize>,
+    content: &'static str,
+) -> ToolCallHandler {
+    Arc::new(move |request| {
+        let call_counter = call_counter.clone();
+        Box::pin(async move {
+            call_counter.fetch_add(1, Ordering::SeqCst);
+            Ok(ToolMessage::new(
+                content,
+                request.tool_call().id().unwrap_or_default(),
+            ))
+        })
+    })
+}
+
+fn failing_tool_handler(call_counter: Arc<AtomicUsize>, message: &'static str) -> ToolCallHandler {
+    Arc::new(move |request| {
+        let call_counter = call_counter.clone();
+        Box::pin(async move {
+            call_counter.fetch_add(1, Ordering::SeqCst);
+            Err(langchain::LangChainError::request(format!(
+                "{message}: {}",
+                request.tool_call().name()
+            )))
+        })
+    })
+}
+
+fn create_temp_dir(prefix: &str) -> std::path::PathBuf {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system time should be after unix epoch")
+        .as_nanos();
+    let path = std::env::temp_dir().join(format!(
+        "langchain-rs-{prefix}-{}-{unique}",
+        std::process::id()
+    ));
+    fs::create_dir_all(&path).expect("temporary directory should be created");
+    path
 }
 
 #[derive(Clone, Default)]
