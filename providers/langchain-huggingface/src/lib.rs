@@ -16,6 +16,8 @@ use serde_json::Value;
 const DEFAULT_CHAT_BASE_URL: &str = "https://router.huggingface.co/v1";
 const DEFAULT_INFERENCE_BASE_URL: &str = "https://router.huggingface.co/hf-inference/models";
 
+pub mod data;
+
 fn default_hf_api_key() -> Option<String> {
     std::env::var("HF_TOKEN")
         .ok()

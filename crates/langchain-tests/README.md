@@ -35,7 +35,8 @@ assert_chat_model_response(
 - Reusable assertions for chat models, LLMs, embeddings, retrievers, and vectorstores
 - Reusable assertions for tools, caches, and stores
 - Standardized test harness modules: `unit_tests` and `integration_tests`
-- Standard suites for caches, base stores, tools, and document indexes
+- `BaseStandardTests` and `StandardTestSuite` helpers for guarding standard-suite drift
+- Standard suites for caches, base stores, tools, document indexes, and sandboxes
 - Utility compatibility surface such as `utils::pydantic`
 - Shared test-only traits such as `EmbeddingsUnderTest` and `VectorStoreUnderTest`
 
@@ -44,3 +45,4 @@ assert_chat_model_response(
 - `tests/standard_helpers.rs`
 - `tests/tools_cache_store.rs`
 - `tests/extended_standard_helpers.rs`
+- `tests/standard_surface.rs`

@@ -1,4 +1,5 @@
 pub mod chat_models;
+pub mod data;
 pub mod output_parsers;
 pub mod retrievers;
 pub mod tools;

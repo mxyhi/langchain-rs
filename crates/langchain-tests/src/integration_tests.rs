@@ -4,6 +4,7 @@ pub mod chat_models;
 pub mod embeddings;
 pub mod indexer;
 pub mod retrievers;
+pub mod sandbox;
 pub mod tools;
 pub mod vectorstores;
 
@@ -165,4 +166,5 @@ pub use cache::{AsyncCacheHarness, AsyncCacheTestSuite, SyncCacheHarness, SyncCa
 pub use embeddings::{EmbeddingsIntegrationHarness, EmbeddingsIntegrationTests};
 pub use indexer::{DocumentIndexHarness, DocumentIndexIntegrationTests};
 pub use retrievers::{RetrieversIntegrationHarness, RetrieversIntegrationTests};
+pub use sandbox::{SandboxIntegrationHarness, SandboxIntegrationTests};
 pub use tools::{ToolIntegrationHarness, ToolsIntegrationTests};

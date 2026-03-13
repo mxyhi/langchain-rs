@@ -1,8 +1,9 @@
+use langchain_anthropic::middleware::AnthropicPromptCachingMiddleware;
 use langchain_anthropic::{ChatAnthropic, convert_to_anthropic_tool};
 use langchain_core::language_models::BaseChatModel;
 use langchain_core::language_models::{ToolBindingOptions, ToolChoice};
 use langchain_core::messages::HumanMessage;
-use langchain_core::runnables::Runnable;
+use langchain_core::runnables::{Runnable, RunnableConfig};
 use langchain_core::tools::tool;
 use serde_json::json;
 use wiremock::matchers::{body_json, header, method, path};
@@ -148,4 +149,51 @@ async fn bind_tools_serializes_anthropic_tool_schema_and_parses_tool_use() {
             }
         })
     );
+}
+
+#[tokio::test]
+async fn prompt_caching_metadata_serializes_into_messages_request() {
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .and(body_json(json!({
+            "model": "claude-3-7-sonnet-latest",
+            "max_tokens": 1024,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        { "type": "text", "text": "cache this prompt" }
+                    ]
+                }
+            ],
+            "cache_control": {
+                "type": "ephemeral",
+                "ttl": "1h"
+            }
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id": "msg_cache_123",
+            "model": "claude-3-7-sonnet-latest",
+            "content": [
+                { "type": "text", "text": "cached" }
+            ]
+        })))
+        .mount(&server)
+        .await;
+
+    let model = ChatAnthropic::new("claude-3-7-sonnet-latest", server.uri(), None::<&str>);
+    let config = AnthropicPromptCachingMiddleware::new()
+        .with_ttl("1h")
+        .with_min_messages_to_cache(1)
+        .configured_config(1, RunnableConfig::default())
+        .expect("cache middleware should produce Anthropic cache metadata");
+
+    let message = model
+        .invoke(vec![HumanMessage::new("cache this prompt").into()], config)
+        .await
+        .expect("anthropic invocation with cache metadata should succeed");
+
+    assert_eq!(message.content(), "cached");
 }

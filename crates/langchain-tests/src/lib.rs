@@ -1,3 +1,4 @@
+pub mod base;
 pub mod base_store;
 pub mod caches;
 pub mod chat_models;
@@ -11,6 +12,7 @@ pub mod unit_tests;
 pub mod utils;
 pub mod vectorstores;
 
+pub use base::{BaseStandardTests, StandardTestSuite};
 pub use base_store::assert_store_round_trip;
 pub use base_store::assert_store_roundtrip;
 pub use caches::{
@@ -28,9 +30,9 @@ pub use integration_tests::{
     BaseStoreHarness, BaseStoreSyncTests, ChatModelIntegrationHarness, ChatModelIntegrationTests,
     DocumentIndexHarness, DocumentIndexIntegrationTests, EmbeddingsIntegrationHarness,
     EmbeddingsIntegrationTests, RetrieverIntegrationHarness, RetrieverIntegrationTests,
-    RetrieversIntegrationHarness, RetrieversIntegrationTests, SyncCacheHarness, SyncCacheTestSuite,
-    ToolIntegrationHarness, ToolsIntegrationTests, VectorStoreIntegrationHarness,
-    VectorStoreIntegrationTests,
+    RetrieversIntegrationHarness, RetrieversIntegrationTests, SandboxIntegrationHarness,
+    SandboxIntegrationTests, SyncCacheHarness, SyncCacheTestSuite, ToolIntegrationHarness,
+    ToolsIntegrationTests, VectorStoreIntegrationHarness, VectorStoreIntegrationTests,
 };
 pub use llms::{assert_llm_generate_texts, assert_llm_invoke_response, assert_llm_token_usage};
 pub use retrievers::{RetrieverUnderTest, assert_retriever_returns_expected_document};

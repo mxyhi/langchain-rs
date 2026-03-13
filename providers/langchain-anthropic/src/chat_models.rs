@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::client::AnthropicClientConfig;
+use crate::middleware::CACHE_CONTROL_CONFIG_KEY;
 
 #[derive(Debug, Clone)]
 pub struct ChatAnthropic {
@@ -56,6 +57,7 @@ impl ChatAnthropic {
     fn request(
         &self,
         messages: Vec<BaseMessage>,
+        config: &RunnableConfig,
     ) -> Result<AnthropicMessagesRequest, LangChainError> {
         let mut system_parts = Vec::new();
         let mut body_messages = Vec::new();
@@ -79,6 +81,7 @@ impl ChatAnthropic {
             max_tokens: self.max_tokens,
             temperature: self.temperature,
             messages: body_messages,
+            cache_control: cache_control_from_config(config)?,
             tools: (!self.tools.is_empty()).then(|| {
                 self.tools
                     .iter()
@@ -98,13 +101,13 @@ impl BaseChatModel for ChatAnthropic {
     fn generate<'a>(
         &'a self,
         messages: Vec<BaseMessage>,
-        _config: RunnableConfig,
+        config: RunnableConfig,
     ) -> BoxFuture<'a, Result<AIMessage, LangChainError>> {
         Box::pin(async move {
             let response = self
                 .config
                 .post("v1/messages")
-                .json(&self.request(messages)?)
+                .json(&self.request(messages, &config)?)
                 .send()
                 .await
                 .map_err(|error| LangChainError::request(error.to_string()))?;
@@ -227,9 +230,53 @@ struct AnthropicMessagesRequest {
     temperature: Option<f32>,
     messages: Vec<AnthropicMessage>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    cache_control: Option<AnthropicCacheControl>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     tools: Option<Vec<AnthropicToolDefinition>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tool_choice: Option<AnthropicToolChoice>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+struct AnthropicCacheControl {
+    #[serde(rename = "type")]
+    kind: String,
+    ttl: String,
+}
+
+fn cache_control_from_config(
+    config: &RunnableConfig,
+) -> Result<Option<AnthropicCacheControl>, LangChainError> {
+    config
+        .metadata
+        .get(CACHE_CONTROL_CONFIG_KEY)
+        .cloned()
+        .map(|value| {
+            let cache_control: AnthropicCacheControl = serde_json::from_value(value).map_err(
+                |error| {
+                    LangChainError::request(format!(
+                        "invalid Anthropic cache control metadata `{CACHE_CONTROL_CONFIG_KEY}`: {error}"
+                    ))
+                },
+            )?;
+
+            if cache_control.kind != "ephemeral" {
+                return Err(LangChainError::request(format!(
+                    "unsupported Anthropic cache control type `{}`; expected `ephemeral`",
+                    cache_control.kind
+                )));
+            }
+
+            if !matches!(cache_control.ttl.as_str(), "5m" | "1h") {
+                return Err(LangChainError::request(format!(
+                    "unsupported Anthropic cache control ttl `{}`; expected `5m` or `1h`",
+                    cache_control.ttl
+                )));
+            }
+
+            Ok(cache_control)
+        })
+        .transpose()
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]

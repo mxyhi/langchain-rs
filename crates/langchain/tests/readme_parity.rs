@@ -232,6 +232,18 @@ fn provider_readmes_document_public_data_namespaces_when_exposed() {
             "providers/langchain-openrouter/README.md",
             "data::openrouter_profile()",
         ),
+        (
+            "providers/langchain-openai/README.md",
+            "data::openai_profile()",
+        ),
+        (
+            "providers/langchain-huggingface/README.md",
+            "data::huggingface_profile()",
+        ),
+        (
+            "providers/langchain-perplexity/README.md",
+            "data::perplexity_profile()",
+        ),
         ("providers/langchain-xai/README.md", "data::xai_profile()"),
     ];
 
@@ -245,4 +257,54 @@ fn provider_readmes_document_public_data_namespaces_when_exposed() {
             required
         );
     }
+}
+
+#[test]
+fn exa_readme_tracks_the_actual_root_api_surface() {
+    let readme_path = workspace_root().join("providers/langchain-exa/README.md");
+    let readme = read_file(&readme_path);
+
+    for required in [
+        "ExaSearchResults::new()",
+        "ExaFindSimilarResults::new()",
+        "TextContentsOptions::default().with_max_characters(",
+    ] {
+        assert!(
+            readme.contains(required),
+            "{} should document exa root API via {:?}",
+            readme_path.display(),
+            required
+        );
+    }
+
+    assert!(
+        !readme.contains("max_results()"),
+        "{} should not document nonexistent ExaSearchRetriever::max_results()",
+        readme_path.display()
+    );
+}
+
+#[test]
+fn perplexity_readme_matches_current_api_surface() {
+    let readme_path = workspace_root().join("providers/langchain-perplexity/README.md");
+    let readme = read_file(&readme_path);
+
+    for required in [
+        "use langchain_core::language_models::BaseChatModel;",
+        "let model = ChatPerplexity::new(\"sonar\")",
+        "`UserLocation`, `MediaResponse`, `MediaResponseOverrides`, `WebSearchOptions`",
+    ] {
+        assert!(
+            readme.contains(required),
+            "{} should contain {:?}",
+            readme_path.display(),
+            required
+        );
+    }
+
+    assert!(
+        !readme.contains("ChatPerplexity::new(\"sonar\", None::<&str>)"),
+        "{} should not describe the removed two-argument constructor",
+        readme_path.display()
+    );
 }

@@ -1,10 +1,11 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use crate::LangChainError;
 use crate::messages::{BaseMessage, HumanMessage, SystemMessage};
 use crate::runnables::{Runnable, RunnableConfig};
 
 pub type PromptArguments = HashMap<String, PromptArgument>;
+pub type PromptMetadata = BTreeMap<String, String>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum PromptArgument {
@@ -27,17 +28,37 @@ impl PromptArgument {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PromptTemplate {
     template: String,
+    metadata: PromptMetadata,
 }
 
 impl PromptTemplate {
     pub fn new(template: impl Into<String>) -> Self {
         Self {
             template: template.into(),
+            metadata: PromptMetadata::new(),
         }
     }
 
     pub fn format(&self, arguments: &PromptArguments) -> Result<String, LangChainError> {
         render_template(&self.template, arguments)
+    }
+
+    pub fn template(&self) -> &str {
+        &self.template
+    }
+
+    pub fn metadata(&self) -> &PromptMetadata {
+        &self.metadata
+    }
+
+    pub fn with_metadata(mut self, metadata: PromptMetadata) -> Self {
+        self.metadata = metadata;
+        self
+    }
+
+    pub fn insert_metadata(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.metadata.insert(key.into(), value.into());
+        self
     }
 }
 
@@ -78,12 +99,14 @@ impl PromptMessageTemplate {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChatPromptTemplate {
     messages: Vec<PromptMessageTemplate>,
+    metadata: PromptMetadata,
 }
 
 impl ChatPromptTemplate {
     pub fn from_messages(messages: impl IntoIterator<Item = PromptMessageTemplate>) -> Self {
         Self {
             messages: messages.into_iter().collect(),
+            metadata: PromptMetadata::new(),
         }
     }
 
@@ -114,6 +137,15 @@ impl ChatPromptTemplate {
         }
 
         Ok(rendered)
+    }
+
+    pub fn metadata(&self) -> &PromptMetadata {
+        &self.metadata
+    }
+
+    pub fn with_metadata(mut self, metadata: PromptMetadata) -> Self {
+        self.metadata = metadata;
+        self
     }
 }
 

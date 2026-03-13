@@ -1,7 +1,7 @@
 use std::thread;
 
 use langchain_core::LangChainError;
-use langchain_core::prompts::PromptTemplate;
+use langchain_core::prompts::{PromptMetadata, PromptTemplate};
 use reqwest::{Client, Url};
 use serde::{Deserialize, Serialize};
 
@@ -108,7 +108,7 @@ impl HubClient {
 
             let response = builder.send().await.map_err(http_error)?;
             let body = parse_success_json::<HubPullResponse>(response).await?;
-            body.manifest.into_prompt_template()
+            body.into_prompt_template()
         })
     }
 
@@ -172,18 +172,21 @@ impl HubPromptManifest {
     fn from_prompt_template(prompt: &PromptTemplate) -> Result<Self, LangChainError> {
         Ok(Self {
             kind: "prompt_template".to_owned(),
-            template: extract_prompt_template_source(prompt)?,
+            template: prompt.template().to_owned(),
         })
     }
 
-    fn into_prompt_template(self) -> Result<PromptTemplate, LangChainError> {
+    fn into_prompt_template(
+        self,
+        metadata: PromptMetadata,
+    ) -> Result<PromptTemplate, LangChainError> {
         if self.kind != "prompt_template" {
             return Err(LangChainError::unsupported(format!(
                 "unsupported hub manifest kind `{}`; only prompt_template is supported",
                 self.kind
             )));
         }
-        Ok(PromptTemplate::new(self.template))
+        Ok(PromptTemplate::new(self.template).with_metadata(metadata))
     }
 }
 
@@ -200,27 +203,12 @@ struct HubPushResponse {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 struct HubPullResponse {
     manifest: HubPromptManifest,
-}
-
-fn extract_prompt_template_source(prompt: &PromptTemplate) -> Result<String, LangChainError> {
-    // `PromptTemplate` lives in langchain-core and does not yet expose a stable serializer or
-    // accessor. The debug representation is still structured enough to recover the source string
-    // without reaching into private fields or widening the classic surface to fake generic support.
-    let debug = format!("{prompt:?}");
-    let prefix = "PromptTemplate { template: ";
-    let suffix = " }";
-    if !debug.starts_with(prefix) || !debug.ends_with(suffix) {
-        return Err(LangChainError::unsupported(
-            "prompt serialization requires PromptTemplate debug output with a template field",
-        ));
-    }
-
-    let json_string = &debug[prefix.len()..debug.len() - suffix.len()];
-    serde_json::from_str::<String>(json_string).map_err(|error| {
-        LangChainError::request(format!(
-            "failed to serialize prompt template for hub push: {error}"
-        ))
-    })
+    #[serde(default)]
+    owner: Option<String>,
+    #[serde(default)]
+    repo: Option<String>,
+    #[serde(default)]
+    commit_hash: Option<String>,
 }
 
 fn parse_owner_repo_commit(
@@ -288,4 +276,20 @@ where
 
 fn http_error(error: reqwest::Error) -> LangChainError {
     LangChainError::request(format!("hub HTTP request failed: {error}"))
+}
+
+impl HubPullResponse {
+    fn into_prompt_template(self) -> Result<PromptTemplate, LangChainError> {
+        let mut metadata = PromptMetadata::new();
+        if let Some(owner) = self.owner {
+            metadata.insert("lc_hub_owner".to_owned(), owner);
+        }
+        if let Some(repo) = self.repo {
+            metadata.insert("lc_hub_repo".to_owned(), repo);
+        }
+        if let Some(commit_hash) = self.commit_hash {
+            metadata.insert("lc_hub_commit_hash".to_owned(), commit_hash);
+        }
+        self.manifest.into_prompt_template(metadata)
+    }
 }

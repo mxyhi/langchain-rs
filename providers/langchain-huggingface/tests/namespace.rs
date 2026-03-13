@@ -34,4 +34,14 @@ fn huggingface_namespaces_match_root_exports() {
     );
     assert_eq!(pipeline.model_name(), "meta-llama/Llama-3.1-8B-Instruct");
     assert!(!pipeline.is_available());
+
+    let profile = langchain_huggingface::data::huggingface_profile();
+    assert_eq!(profile.key, "huggingface");
+    assert_eq!(profile.package_name, "langchain-huggingface");
+    assert!(profile.capabilities.chat_model);
+    assert!(profile.capabilities.llm);
+    assert!(profile.capabilities.embeddings);
+    assert_eq!(langchain_huggingface::data::default_base_url(), None);
+    assert!(langchain_huggingface::data::huggingface_exports().contains(&"ChatHuggingFace"));
+    assert!(langchain_huggingface::data::huggingface_exports().contains(&"HuggingFacePipeline"));
 }

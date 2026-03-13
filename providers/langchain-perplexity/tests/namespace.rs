@@ -13,6 +13,24 @@ fn perplexity_namespaces_expose_public_surface() {
         langchain_perplexity::types::WebSearchOptions::default().with_search_context_size(3);
     assert_eq!(root_search_options, namespaced_search_options);
 
+    let root_location = langchain_perplexity::UserLocation::new("US")
+        .with_city("Boston")
+        .with_region("MA");
+    let namespaced_location = langchain_perplexity::types::UserLocation::new("US")
+        .with_city("Boston")
+        .with_region("MA");
+    assert_eq!(root_location, namespaced_location);
+
+    let root_media = langchain_perplexity::MediaResponseOverrides::default().with_images(vec![
+        langchain_perplexity::MediaResponse::new("Rust logo", "https://example.com/rust.png"),
+    ]);
+    let namespaced_media = langchain_perplexity::types::MediaResponseOverrides::default()
+        .with_images(vec![langchain_perplexity::types::MediaResponse::new(
+            "Rust logo",
+            "https://example.com/rust.png",
+        )]);
+    assert_eq!(root_media, namespaced_media);
+
     let json_value = langchain_perplexity::ReasoningJsonOutputParser
         .parse_str("<think>reason</think>{\"answer\":\"Boston\"}")
         .expect("root parser should succeed");
@@ -35,6 +53,24 @@ fn perplexity_namespaces_expose_public_surface() {
         langchain_perplexity::output_parsers::strip_think_tags(
             "<think>reason</think>{\"answer\":\"Boston\"}"
         )
+    );
+
+    let profile = langchain_perplexity::data::perplexity_profile();
+    assert_eq!(profile.key, "perplexity");
+    assert_eq!(profile.package_name, "langchain-perplexity");
+    assert!(profile.capabilities.chat_model);
+    assert!(profile.capabilities.retriever);
+    assert!(profile.capabilities.parser_or_tooling);
+    assert_eq!(
+        langchain_perplexity::data::default_base_url(),
+        Some("https://api.perplexity.ai")
+    );
+    assert!(langchain_perplexity::data::perplexity_exports().contains(&"ChatPerplexity"));
+    assert!(
+        langchain_perplexity::data::perplexity_exports().contains(&"PerplexitySearchRetriever")
+    );
+    assert!(
+        langchain_perplexity::data::perplexity_exports().contains(&"ReasoningJsonOutputParser")
     );
 }
 

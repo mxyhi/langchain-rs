@@ -141,6 +141,9 @@ async fn hub_pull_fetches_prompt_template_from_http_manifest() {
         .and(path("/repos/owner/prompt"))
         .and(query_param("commit", "abc123"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "owner": "owner",
+            "repo": "prompt",
+            "commit_hash": "abc123",
             "manifest": {
                 "kind": "prompt_template",
                 "template": "Hello {name}"
@@ -155,4 +158,19 @@ async fn hub_pull_fetches_prompt_template_from_http_manifest() {
         .format(&[("name".to_owned(), PromptArgument::String("Rust".to_owned()))].into())
         .expect("pulled prompt should render");
     assert_eq!(rendered, "Hello Rust");
+    assert_eq!(
+        prompt.metadata().get("lc_hub_owner").map(String::as_str),
+        Some("owner")
+    );
+    assert_eq!(
+        prompt.metadata().get("lc_hub_repo").map(String::as_str),
+        Some("prompt")
+    );
+    assert_eq!(
+        prompt
+            .metadata()
+            .get("lc_hub_commit_hash")
+            .map(String::as_str),
+        Some("abc123")
+    );
 }

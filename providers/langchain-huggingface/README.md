@@ -41,7 +41,8 @@ assert_eq!(embeddings.model_name(), "sentence-transformers/all-mpnet-base-v2");
 - `HuggingFaceEmbeddings`, `HuggingFaceEndpointEmbeddings`
 - `HuggingFaceEndpoint`
 - `HuggingFacePipeline` as an explicit local-pipeline boundary marker, not a runnable `BaseLLM`
-- `chat_models`, `embeddings`, `llms`, `pipelines` namespaces
+- `data::huggingface_profile()`, `data::huggingface_exports()`, `data::default_base_url()`
+- `chat_models`, `embeddings`, `llms`, `pipelines`, `data` namespaces
 
 ## Tests
 
