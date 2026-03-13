@@ -114,7 +114,7 @@ fn classic_conversation_string_buffer_memory_uses_prompt_keys() {
         memory
             .load_memory_variables(Default::default())
             .get("history"),
-        Some(&json!("Human: Where are we?\nAI: In tests"))
+        Some(&json!("\nHuman: Where are we?\nAI: In tests"))
     );
     memory.clear();
     assert_eq!(

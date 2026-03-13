@@ -3,8 +3,7 @@ use std::fmt;
 use std::sync::RwLock;
 
 use langchain_core::messages::{
-    AIMessage, BaseMessage, HumanMessage, MessageLikeRepresentation, get_buffer_string,
-    messages_to_dict,
+    AIMessage, BaseMessage, HumanMessage, MessageRole, messages_to_dict,
 };
 use serde_json::{Value, json};
 
@@ -17,6 +16,42 @@ pub use langchain_core::chat_history::{BaseChatMessageHistory, InMemoryChatMessa
 
 const DEFAULT_MEMORY_KEY: &str = "history";
 const DEFAULT_OUTPUT_KEY: &str = "output";
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum MemoryBuffer {
+    Text(String),
+    Messages(Vec<BaseMessage>),
+}
+
+impl MemoryBuffer {
+    pub fn as_text(&self) -> Option<&str> {
+        match self {
+            Self::Text(text) => Some(text),
+            Self::Messages(_) => None,
+        }
+    }
+
+    pub fn as_messages(&self) -> Option<&[BaseMessage]> {
+        match self {
+            Self::Text(_) => None,
+            Self::Messages(messages) => Some(messages),
+        }
+    }
+
+    pub fn into_messages(self) -> Option<Vec<BaseMessage>> {
+        match self {
+            Self::Text(_) => None,
+            Self::Messages(messages) => Some(messages),
+        }
+    }
+
+    fn into_json(self) -> Value {
+        match self {
+            Self::Text(text) => json!(text),
+            Self::Messages(messages) => json!(messages_to_dict(&messages)),
+        }
+    }
+}
 
 #[derive(Debug, Default)]
 pub struct SimpleMemory {
@@ -80,16 +115,31 @@ where
     fn clear(&self) {}
 }
 
-#[derive(Debug)]
-pub struct ConversationBufferMemory {
-    chat_memory: InMemoryChatMessageHistory,
+pub struct ConversationBufferMemory<H = InMemoryChatMessageHistory> {
+    chat_memory: H,
     input_key: Option<String>,
     output_key: Option<String>,
     return_messages: bool,
     memory_key: String,
+    human_prefix: String,
+    ai_prefix: String,
 }
 
-impl Default for ConversationBufferMemory {
+impl<H> fmt::Debug for ConversationBufferMemory<H> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ConversationBufferMemory")
+            .field("input_key", &self.input_key)
+            .field("output_key", &self.output_key)
+            .field("return_messages", &self.return_messages)
+            .field("memory_key", &self.memory_key)
+            .field("human_prefix", &self.human_prefix)
+            .field("ai_prefix", &self.ai_prefix)
+            .finish()
+    }
+}
+
+impl Default for ConversationBufferMemory<InMemoryChatMessageHistory> {
     fn default() -> Self {
         Self {
             chat_memory: InMemoryChatMessageHistory::new(),
@@ -97,13 +147,29 @@ impl Default for ConversationBufferMemory {
             output_key: None,
             return_messages: false,
             memory_key: DEFAULT_MEMORY_KEY.to_owned(),
+            human_prefix: "Human".to_owned(),
+            ai_prefix: "AI".to_owned(),
         }
     }
 }
 
-impl ConversationBufferMemory {
+impl ConversationBufferMemory<InMemoryChatMessageHistory> {
     pub fn new() -> Self {
         Self::default()
+    }
+}
+
+impl<H> ConversationBufferMemory<H> {
+    pub fn with_chat_memory<T>(self, chat_memory: T) -> ConversationBufferMemory<T> {
+        ConversationBufferMemory {
+            chat_memory,
+            input_key: self.input_key,
+            output_key: self.output_key,
+            return_messages: self.return_messages,
+            memory_key: self.memory_key,
+            human_prefix: self.human_prefix,
+            ai_prefix: self.ai_prefix,
+        }
     }
 
     pub fn with_input_key(mut self, input_key: impl Into<String>) -> Self {
@@ -126,16 +192,63 @@ impl ConversationBufferMemory {
         self
     }
 
+    pub fn with_human_prefix(mut self, human_prefix: impl Into<String>) -> Self {
+        self.human_prefix = human_prefix.into();
+        self
+    }
+
+    pub fn with_ai_prefix(mut self, ai_prefix: impl Into<String>) -> Self {
+        self.ai_prefix = ai_prefix.into();
+        self
+    }
+}
+
+impl<H> ConversationBufferMemory<H>
+where
+    H: BaseChatMessageHistory,
+{
     pub fn buffer_as_messages(&self) -> Vec<BaseMessage> {
         self.chat_memory.messages()
     }
 
     pub fn buffer_as_str(&self) -> Result<String, LangChainError> {
-        get_buffer_string(
-            self.buffer_as_messages()
-                .into_iter()
-                .map(MessageLikeRepresentation::from),
+        render_buffer_string(
+            &self.buffer_as_messages(),
+            &self.human_prefix,
+            &self.ai_prefix,
         )
+    }
+
+    pub async fn abuffer_as_messages(&self) -> Vec<BaseMessage> {
+        self.chat_memory.aget_messages().await
+    }
+
+    pub async fn abuffer_as_str(&self) -> Result<String, LangChainError> {
+        let messages = self.chat_memory.aget_messages().await;
+        render_buffer_string(&messages, &self.human_prefix, &self.ai_prefix)
+    }
+
+    pub fn buffer(&self) -> MemoryBuffer {
+        if self.return_messages {
+            MemoryBuffer::Messages(self.buffer_as_messages())
+        } else {
+            MemoryBuffer::Text(
+                self.buffer_as_str()
+                    .expect("conversation buffer memory should render to a string"),
+            )
+        }
+    }
+
+    pub async fn abuffer(&self) -> MemoryBuffer {
+        if self.return_messages {
+            MemoryBuffer::Messages(self.abuffer_as_messages().await)
+        } else {
+            MemoryBuffer::Text(
+                self.abuffer_as_str()
+                    .await
+                    .expect("conversation buffer memory should render to a string"),
+            )
+        }
     }
 
     pub fn try_save_context(
@@ -157,24 +270,40 @@ impl ConversationBufferMemory {
         ]);
         Ok(())
     }
+
+    pub async fn try_asave_context(
+        &self,
+        inputs: BTreeMap<String, Value>,
+        outputs: BTreeMap<String, Value>,
+    ) -> Result<(), LangChainError> {
+        let (input, output) = resolve_input_output(
+            &inputs,
+            &outputs,
+            self.input_key.as_deref(),
+            self.output_key.as_deref(),
+            &[self.memory_key.clone()],
+        )?;
+
+        self.chat_memory
+            .aadd_messages(vec![
+                HumanMessage::new(input).into(),
+                AIMessage::new(output).into(),
+            ])
+            .await;
+        Ok(())
+    }
 }
 
-impl BaseMemory for ConversationBufferMemory {
+impl<H> BaseMemory for ConversationBufferMemory<H>
+where
+    H: BaseChatMessageHistory,
+{
     fn memory_variables(&self) -> Vec<String> {
         vec![self.memory_key.clone()]
     }
 
     fn load_memory_variables(&self, _inputs: BTreeMap<String, Value>) -> BTreeMap<String, Value> {
-        let value = if self.return_messages {
-            json!(messages_to_dict(&self.buffer_as_messages()))
-        } else {
-            json!(
-                self.buffer_as_str()
-                    .expect("conversation buffer memory should render to a string")
-            )
-        };
-
-        [(self.memory_key.clone(), value)].into()
+        [(self.memory_key.clone(), self.buffer().into_json())].into()
     }
 
     fn save_context(&self, inputs: BTreeMap<String, Value>, outputs: BTreeMap<String, Value>) {
@@ -185,19 +314,62 @@ impl BaseMemory for ConversationBufferMemory {
     fn clear(&self) {
         self.chat_memory.clear();
     }
+
+    fn aload_memory_variables<'a>(
+        &'a self,
+        _inputs: BTreeMap<String, Value>,
+    ) -> futures_util::future::BoxFuture<'a, BTreeMap<String, Value>> {
+        Box::pin(
+            async move { [(self.memory_key.clone(), self.abuffer().await.into_json())].into() },
+        )
+    }
+
+    fn asave_context<'a>(
+        &'a self,
+        inputs: BTreeMap<String, Value>,
+        outputs: BTreeMap<String, Value>,
+    ) -> futures_util::future::BoxFuture<'a, ()> {
+        Box::pin(async move {
+            self.try_asave_context(inputs, outputs)
+                .await
+                .expect("conversation buffer memory should resolve input and output keys");
+        })
+    }
+
+    fn aclear<'a>(&'a self) -> futures_util::future::BoxFuture<'a, ()> {
+        Box::pin(async move {
+            self.chat_memory.aclear().await;
+        })
+    }
 }
 
-#[derive(Debug)]
-pub struct ConversationBufferWindowMemory {
-    chat_memory: InMemoryChatMessageHistory,
+pub struct ConversationBufferWindowMemory<H = InMemoryChatMessageHistory> {
+    chat_memory: H,
     input_key: Option<String>,
     output_key: Option<String>,
     return_messages: bool,
     memory_key: String,
+    human_prefix: String,
+    ai_prefix: String,
     k: usize,
 }
 
-impl Default for ConversationBufferWindowMemory {
+impl<H> fmt::Debug for ConversationBufferWindowMemory<H> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ConversationBufferWindowMemory")
+            .field("input_key", &self.input_key)
+            .field("output_key", &self.output_key)
+            .field("return_messages", &self.return_messages)
+            .field("memory_key", &self.memory_key)
+            .field("human_prefix", &self.human_prefix)
+            .field("ai_prefix", &self.ai_prefix)
+            .field("k", &self.k)
+            .finish()
+    }
+}
+
+impl Default for ConversationBufferWindowMemory<InMemoryChatMessageHistory> {
     fn default() -> Self {
         Self {
             chat_memory: InMemoryChatMessageHistory::new(),
@@ -205,14 +377,31 @@ impl Default for ConversationBufferWindowMemory {
             output_key: None,
             return_messages: false,
             memory_key: DEFAULT_MEMORY_KEY.to_owned(),
+            human_prefix: "Human".to_owned(),
+            ai_prefix: "AI".to_owned(),
             k: 5,
         }
     }
 }
 
-impl ConversationBufferWindowMemory {
+impl ConversationBufferWindowMemory<InMemoryChatMessageHistory> {
     pub fn new() -> Self {
         Self::default()
+    }
+}
+
+impl<H> ConversationBufferWindowMemory<H> {
+    pub fn with_chat_memory<T>(self, chat_memory: T) -> ConversationBufferWindowMemory<T> {
+        ConversationBufferWindowMemory {
+            chat_memory,
+            input_key: self.input_key,
+            output_key: self.output_key,
+            return_messages: self.return_messages,
+            memory_key: self.memory_key,
+            human_prefix: self.human_prefix,
+            ai_prefix: self.ai_prefix,
+            k: self.k,
+        }
     }
 
     pub fn with_input_key(mut self, input_key: impl Into<String>) -> Self {
@@ -235,37 +424,68 @@ impl ConversationBufferWindowMemory {
         self
     }
 
+    pub fn with_human_prefix(mut self, human_prefix: impl Into<String>) -> Self {
+        self.human_prefix = human_prefix.into();
+        self
+    }
+
+    pub fn with_ai_prefix(mut self, ai_prefix: impl Into<String>) -> Self {
+        self.ai_prefix = ai_prefix.into();
+        self
+    }
+
     pub fn with_k(mut self, k: usize) -> Self {
         self.k = k;
         self
     }
+}
 
+impl<H> ConversationBufferWindowMemory<H>
+where
+    H: BaseChatMessageHistory,
+{
     pub fn buffer_as_messages(&self) -> Vec<BaseMessage> {
-        if self.k == 0 {
-            return Vec::new();
-        }
-
-        let messages = self.chat_memory.messages();
-        let window_size = self.k.saturating_mul(2);
-        let message_count = messages.len();
-
-        if message_count <= window_size {
-            return messages;
-        }
-
-        // `k` is counted in turns, so the visible window keeps the last 2*k messages.
-        messages
-            .into_iter()
-            .skip(message_count - window_size)
-            .collect()
+        trim_window_messages(self.chat_memory.messages(), self.k)
     }
 
     pub fn buffer_as_str(&self) -> Result<String, LangChainError> {
-        get_buffer_string(
-            self.buffer_as_messages()
-                .into_iter()
-                .map(MessageLikeRepresentation::from),
+        render_buffer_string(
+            &self.buffer_as_messages(),
+            &self.human_prefix,
+            &self.ai_prefix,
         )
+    }
+
+    pub async fn abuffer_as_messages(&self) -> Vec<BaseMessage> {
+        trim_window_messages(self.chat_memory.aget_messages().await, self.k)
+    }
+
+    pub async fn abuffer_as_str(&self) -> Result<String, LangChainError> {
+        let messages = self.abuffer_as_messages().await;
+        render_buffer_string(&messages, &self.human_prefix, &self.ai_prefix)
+    }
+
+    pub fn buffer(&self) -> MemoryBuffer {
+        if self.return_messages {
+            MemoryBuffer::Messages(self.buffer_as_messages())
+        } else {
+            MemoryBuffer::Text(
+                self.buffer_as_str()
+                    .expect("conversation buffer window memory should render to a string"),
+            )
+        }
+    }
+
+    pub async fn abuffer(&self) -> MemoryBuffer {
+        if self.return_messages {
+            MemoryBuffer::Messages(self.abuffer_as_messages().await)
+        } else {
+            MemoryBuffer::Text(
+                self.abuffer_as_str()
+                    .await
+                    .expect("conversation buffer window memory should render to a string"),
+            )
+        }
     }
 
     pub fn try_save_context(
@@ -287,24 +507,40 @@ impl ConversationBufferWindowMemory {
         ]);
         Ok(())
     }
+
+    pub async fn try_asave_context(
+        &self,
+        inputs: BTreeMap<String, Value>,
+        outputs: BTreeMap<String, Value>,
+    ) -> Result<(), LangChainError> {
+        let (input, output) = resolve_input_output(
+            &inputs,
+            &outputs,
+            self.input_key.as_deref(),
+            self.output_key.as_deref(),
+            &[self.memory_key.clone()],
+        )?;
+
+        self.chat_memory
+            .aadd_messages(vec![
+                HumanMessage::new(input).into(),
+                AIMessage::new(output).into(),
+            ])
+            .await;
+        Ok(())
+    }
 }
 
-impl BaseMemory for ConversationBufferWindowMemory {
+impl<H> BaseMemory for ConversationBufferWindowMemory<H>
+where
+    H: BaseChatMessageHistory,
+{
     fn memory_variables(&self) -> Vec<String> {
         vec![self.memory_key.clone()]
     }
 
     fn load_memory_variables(&self, _inputs: BTreeMap<String, Value>) -> BTreeMap<String, Value> {
-        let value = if self.return_messages {
-            json!(messages_to_dict(&self.buffer_as_messages()))
-        } else {
-            json!(
-                self.buffer_as_str()
-                    .expect("conversation buffer window memory should render to a string")
-            )
-        };
-
-        [(self.memory_key.clone(), value)].into()
+        [(self.memory_key.clone(), self.buffer().into_json())].into()
     }
 
     fn save_context(&self, inputs: BTreeMap<String, Value>, outputs: BTreeMap<String, Value>) {
@@ -314,6 +550,33 @@ impl BaseMemory for ConversationBufferWindowMemory {
 
     fn clear(&self) {
         self.chat_memory.clear();
+    }
+
+    fn aload_memory_variables<'a>(
+        &'a self,
+        _inputs: BTreeMap<String, Value>,
+    ) -> futures_util::future::BoxFuture<'a, BTreeMap<String, Value>> {
+        Box::pin(
+            async move { [(self.memory_key.clone(), self.abuffer().await.into_json())].into() },
+        )
+    }
+
+    fn asave_context<'a>(
+        &'a self,
+        inputs: BTreeMap<String, Value>,
+        outputs: BTreeMap<String, Value>,
+    ) -> futures_util::future::BoxFuture<'a, ()> {
+        Box::pin(async move {
+            self.try_asave_context(inputs, outputs)
+                .await
+                .expect("conversation buffer window memory should resolve input and output keys");
+        })
+    }
+
+    fn aclear<'a>(&'a self) -> futures_util::future::BoxFuture<'a, ()> {
+        Box::pin(async move {
+            self.chat_memory.aclear().await;
+        })
     }
 }
 
@@ -397,14 +660,10 @@ impl ConversationStringBufferMemory {
             .write()
             .expect("conversation string buffer write lock poisoned");
 
-        if buffer.is_empty() {
-            *buffer = format!("{human_line}\n{ai_line}");
-        } else {
-            buffer.push('\n');
-            buffer.push_str(&human_line);
-            buffer.push('\n');
-            buffer.push_str(&ai_line);
-        }
+        buffer.push('\n');
+        buffer.push_str(&human_line);
+        buffer.push('\n');
+        buffer.push_str(&ai_line);
 
         Ok(())
     }
@@ -504,6 +763,52 @@ impl BaseMemory for CombinedMemory {
     }
 }
 
+fn render_buffer_string(
+    messages: &[BaseMessage],
+    human_prefix: &str,
+    ai_prefix: &str,
+) -> Result<String, LangChainError> {
+    messages
+        .iter()
+        .map(|message| render_buffer_line(message, human_prefix, ai_prefix))
+        .collect::<Result<Vec<_>, _>>()
+        .map(|lines| lines.join("\n"))
+}
+
+fn render_buffer_line(
+    message: &BaseMessage,
+    human_prefix: &str,
+    ai_prefix: &str,
+) -> Result<String, LangChainError> {
+    let label = match message.role() {
+        MessageRole::Human => human_prefix,
+        MessageRole::Ai => ai_prefix,
+        MessageRole::System => "System",
+        MessageRole::Tool => "Tool",
+    };
+
+    Ok(format!("{label}: {}", message.content()))
+}
+
+fn trim_window_messages(messages: Vec<BaseMessage>, k: usize) -> Vec<BaseMessage> {
+    if k == 0 {
+        return Vec::new();
+    }
+
+    let window_size = k.saturating_mul(2);
+    let message_count = messages.len();
+
+    if message_count <= window_size {
+        return messages;
+    }
+
+    // `k` is counted in turns, so the visible window keeps the last 2*k messages.
+    messages
+        .into_iter()
+        .skip(message_count - window_size)
+        .collect()
+}
+
 pub fn get_prompt_input_key(
     inputs: &BTreeMap<String, Value>,
     memory_variables: &[String],
@@ -521,7 +826,7 @@ pub fn get_prompt_input_key(
 
     if prompt_input_keys.len() != 1 {
         return Err(LangChainError::request(format!(
-            "one input key expected, got {:?}",
+            "One input key expected got {:?}",
             prompt_input_keys
         )));
     }
@@ -550,8 +855,8 @@ fn resolve_input_output(
         None if outputs.contains_key(DEFAULT_OUTPUT_KEY) => DEFAULT_OUTPUT_KEY.to_owned(),
         None => {
             return Err(LangChainError::request(format!(
-                "multiple output keys present; set output_key explicitly: {:?}",
-                outputs.keys().collect::<Vec<_>>()
+                "Got multiple output keys: {:?}, cannot determine which to store in memory. Please set the 'output_key' explicitly.",
+                outputs.keys().collect::<Vec<_>>(),
             )));
         }
     };
